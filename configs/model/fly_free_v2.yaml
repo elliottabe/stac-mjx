@@ -1,5 +1,5 @@
-MJCF_PATH: 'fruitfly_v1_free.xml'
-name: 'fruitfly_V1_free_walking'
+MJCF_PATH: 'fruitfly_v2.1_muscles.xml'
+name: 'fruitfly_V2_free_walking'
 
 
 N_FRAMES_PER_CLIP: 500 # 1000 environments
@@ -82,43 +82,43 @@ KEYPOINT_MODEL_PAIRS:
   Abd_A4: abdomen_4
   Abd_tip: abdomen_7
   T1L_ThxCx: coxa_T1_left
-  T1L_Tro: femur_T1_left
-  T1L_FeTi: tibia_T1_left
-  T1L_TiTa: tarsus_T1_left
-  T1L_TaT1: tarsus2_T1_left
+  T1L_Tro: trochanter_T1_left
+  T1L_FeTi: femur_T1_left
+  T1L_TiTa: tibia_T1_left
+  T1L_TaT1: tarsus1_T1_left
   T1L_TaT3: tarsus3_T1_left
-  T1L_TaTip: claw_T1_left
+  T1L_TaTip: tarsal_claw_T1_left
   T1R_ThxCx: coxa_T1_right
-  T1R_Tro: femur_T1_right
-  T1R_FeTi: tibia_T1_right
-  T1R_TiTa: tarsus_T1_right
-  T1R_TaT1: tarsus2_T1_right
+  T1R_Tro: trochanter_T1_right
+  T1R_FeTi: femur_T1_right
+  T1R_TiTa: tibia_T1_right
+  T1R_TaT1: tarsus1_T1_right
   T1R_TaT3: tarsus3_T1_right
-  T1R_TaTip: claw_T1_right
-  T2L_Tro: femur_T2_left
-  T2L_FeTi: tibia_T2_left
-  T2L_TiTa: tarsus_T2_left
-  T2L_TaT1: tarsus2_T2_left
+  T1R_TaTip: tarsal_claw_T1_right
+  T2L_Tro: trochanter_T2_left
+  T2L_FeTi: femur_T2_left
+  T2L_TiTa: tibia_T2_left
+  T2L_TaT1: tarsus1_T2_left
   T2L_TaT3: tarsus3_T2_left
-  T2L_TaTip: claw_T2_left
-  T2R_Tro: femur_T2_right
-  T2R_FeTi: tibia_T2_right
-  T2R_TiTa: tarsus_T2_right
-  T2R_TaT1: tarsus2_T2_right
+  T2L_TaTip: tarsal_claw_T2_left
+  T2R_Tro: trochanter_T2_right
+  T2R_FeTi: femur_T2_right
+  T2R_TiTa: tibia_T2_right
+  T2R_TaT1: tarsus1_T2_right
   T2R_TaT3: tarsus3_T2_right
-  T2R_TaTip: claw_T2_right
-  T3L_Tro: femur_T3_left
-  T3L_FeTi: tibia_T3_left
-  T3L_TiTa: tarsus_T3_left
-  T3L_TaT1: tarsus2_T3_left
+  T2R_TaTip: tarsal_claw_T2_right
+  T3L_Tro: trochanter_T3_left
+  T3L_FeTi: femur_T3_left
+  T3L_TiTa: tibia_T3_left
+  T3L_TaT1: tarsus1_T3_left
   T3L_TaT3: tarsus3_T3_left
-  T3L_TaTip: claw_T3_left
-  T3R_Tro: femur_T3_right
-  T3R_FeTi: tibia_T3_right
-  T3R_TiTa: tarsus_T3_right
-  T3R_TaT1: tarsus2_T3_right
+  T3L_TaTip: tarsal_claw_T3_left
+  T3R_Tro: trochanter_T3_right
+  T3R_FeTi: femur_T3_right
+  T3R_TiTa: tibia_T3_right
+  T3R_TaT1: tarsus1_T3_right
   T3R_TaT3: tarsus3_T3_right
-  T3R_TaTip: claw_T3_right
+  T3R_TaTip: tarsal_claw_T3_right
 
 # The initial offsets for each keypoint in meters.
 KEYPOINT_INITIAL_OFFSETS:
@@ -178,12 +178,12 @@ ROOT_OPTIMIZATION_KEYPOINT: "Scutellum"
 TRUNK_OPTIMIZATION_KEYPOINTS: {}
   
 INDIVIDUAL_PART_OPTIMIZATION: 
-  "T1L": ["coxa_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "claw_T1_left"]
-  "T1R": ["coxa_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "claw_T1_right"]
-  "T2L": ["coxa_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "claw_T2_left"]
-  "T2R": ["coxa_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "claw_T2_right"]
-  "T3L": ["coxa_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "claw_T3_left"]
-  "T3R": ["coxa_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "claw_T3_right"]
+  "T1L": ["coxa_T1_left", "trochanter_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus1_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "tarsus4_T1_left", "tarsal_claw_T1_left"]
+  "T1R": ["coxa_T1_right", "trochanter_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus1_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "tarsus4_T1_right", "tarsal_claw_T1_right"]
+  "T2L": ["coxa_T2_left", "trochanter_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus1_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "tarsus4_T2_left", "tarsal_claw_T2_left"]
+  "T2R": ["coxa_T2_right", "trochanter_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus1_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "tarsus4_T2_right", "tarsal_claw_T2_right"]
+  "T3L": ["coxa_T3_left", "trochanter_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus1_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "tarsus4_T3_left", "tarsal_claw_T3_left"]
+  "T3R": ["coxa_T3_right", "trochanter_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus1_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "tarsus4_T3_right", "tarsal_claw_T3_right"]
 
 # Color to use for each keypoint when visualizing the results
 KEYPOINT_COLOR_PAIRS:
