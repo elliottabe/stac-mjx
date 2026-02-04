@@ -12,7 +12,7 @@ LIMB_FTOL: 1.0e-06
 
 # Number of alternating pose and offset optimization rounds. 
 N_ITERS: 6
-N_ITER_Q: 800
+N_ITER_Q: 1000
 N_ITER_M: 2000
 
 KP_NAMES: 
@@ -82,49 +82,49 @@ KEYPOINT_MODEL_PAIRS:
   Abd_A4: abdomen_4
   Abd_tip: abdomen_7
   T1L_ThxCx: coxa_T1_left
-  T1L_Tro: trochanter_T1_left
-  T1L_FeTi: femur_T1_left
-  T1L_TiTa: tibia_T1_left
-  T1L_TaT1: tarsus1_T1_left
+  T1L_Tro: femur_T1_left
+  T1L_FeTi: tibia_T1_left
+  T1L_TiTa: tarsus1_T1_left
+  T1L_TaT1: tarsus2_T1_left
   T1L_TaT3: tarsus3_T1_left
   T1L_TaTip: tarsal_claw_T1_left
   T1R_ThxCx: coxa_T1_right
-  T1R_Tro: trochanter_T1_right
-  T1R_FeTi: femur_T1_right
-  T1R_TiTa: tibia_T1_right
-  T1R_TaT1: tarsus1_T1_right
+  T1R_Tro: femur_T1_right
+  T1R_FeTi: tibia_T1_right
+  T1R_TiTa: tarsus1_T1_right
+  T1R_TaT1: tarsus2_T1_right
   T1R_TaT3: tarsus3_T1_right
   T1R_TaTip: tarsal_claw_T1_right
-  T2L_Tro: trochanter_T2_left
-  T2L_FeTi: femur_T2_left
-  T2L_TiTa: tibia_T2_left
-  T2L_TaT1: tarsus1_T2_left
+  T2L_Tro: femur_T2_left
+  T2L_FeTi: tibia_T2_left
+  T2L_TiTa: tarsus1_T2_left
+  T2L_TaT1: tarsus2_T2_left
   T2L_TaT3: tarsus3_T2_left
   T2L_TaTip: tarsal_claw_T2_left
-  T2R_Tro: trochanter_T2_right
-  T2R_FeTi: femur_T2_right
-  T2R_TiTa: tibia_T2_right
-  T2R_TaT1: tarsus1_T2_right
+  T2R_Tro: femur_T2_right
+  T2R_FeTi: tibia_T2_right
+  T2R_TiTa: tarsus1_T2_right
+  T2R_TaT1: tarsus2_T2_right
   T2R_TaT3: tarsus3_T2_right
   T2R_TaTip: tarsal_claw_T2_right
-  T3L_Tro: trochanter_T3_left
-  T3L_FeTi: femur_T3_left
-  T3L_TiTa: tibia_T3_left
-  T3L_TaT1: tarsus1_T3_left
+  T3L_Tro: femur_T3_left
+  T3L_FeTi: tibia_T3_left
+  T3L_TiTa: tarsus1_T3_left
+  T3L_TaT1: tarsus2_T3_left
   T3L_TaT3: tarsus3_T3_left
   T3L_TaTip: tarsal_claw_T3_left
-  T3R_Tro: trochanter_T3_right
-  T3R_FeTi: femur_T3_right
-  T3R_TiTa: tibia_T3_right
-  T3R_TaT1: tarsus1_T3_right
+  T3R_Tro: femur_T3_right
+  T3R_FeTi: tibia_T3_right
+  T3R_TiTa: tarsus1_T3_right
+  T3R_TaT1: tarsus2_T3_right
   T3R_TaT3: tarsus3_T3_right
   T3R_TaTip: tarsal_claw_T3_right
 
 # The initial offsets for each keypoint in meters.
 KEYPOINT_INITIAL_OFFSETS:
   Scutellum: -0.0475 0 0.0425
-  WingL_base: -0.00694 0.0432 0.0091
-  WingR_base: -0.00694 -0.0432 0.0091
+  WingL_base: -0.00942 0.0453 0.0155
+  WingR_base: -0.00942 -0.0453 0.0155
   Antenna_Base: 0 0.035 0.01
   EyeL: -0.03 0.0025 0.025
   EyeR: 0.03 0.0025 0.025

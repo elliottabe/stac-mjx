@@ -56,7 +56,7 @@ def parse_hydra_config(cfg: DictConfig):
     # First pass: collect all clips and find max length
     clips = []
     max_length = 0
-    for nbout, key in enumerate(bout_dict.keys()):
+    for nbout, key in enumerate(list(bout_dict.keys())):
         # bout_data = bout_dict[key]['clipped_kp']
         # bout_data = bout_data - bout_data[0:1,0:1,:]  # Center to first frame
         # bout_data = bout_dict[key]['aligned_xpos']
