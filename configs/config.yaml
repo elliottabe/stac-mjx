@@ -1,4 +1,46 @@
+# Dataset name - used to pick the data to load
+dataset_name: ${dataset.name}
+
+##### Easy Access Variables #####
+# Version can be overridden via CLI: version=Predictions_3D_20260203-103416
+version: ${dataset.version}
+run_id: 'Testing'
+load_jobid: ''
+note: ''
+restore_checkpoint: ''
+
+# set default task and default training config based on dataset
 defaults:
-  - stac: stac_fly_free
-  - model: fly_free
   - _self_
+  - anatomy: v1
+  - stac: stac_fly_free
+  - paths: workstation
+  - model: fly_free
+  - dataset: free_walking
+  # - train: imitation
+
+
+# set the directory where the output files get saved
+hydra:
+  job:
+      config:
+        override_dirname:
+          exclude_keys:
+            - paths
+            - version
+            - stac
+            - model
+            - anatomy
+            - dataset
+            - restore_checkpoint
+            - gpu
+            - num_gpus
+            - load_jobid
+            - note
+
+  run:
+    # dir: ${paths.base_dir}/${hydra:job.override_dirname}
+    dir: ${paths.base_dir}/${run_id}
+  sweep:
+    dir: ${paths.base_dir}/${run_id}
+    subdir: ${hydra.job.override_dirname}

@@ -1,20 +1,23 @@
-fit_offsets_path: "Fruitfly_fit_V1_free.h5"
-ik_only_path: "Fruitfly_ik_V1_free.h5"
+# STAC pipeline configuration - paths resolved via Hydra interpolation
+# Use: python run_stac_fly_model.py paths=workstation dataset=free_walking version=<your_version>
 
-data_path: "/data2/users/eabe/datasets/Johnson_lab/free_walking/Predictions_3D_20260114-145343/preprocessed_bout.h5"
-save_path: "/data2/users/eabe/datasets/Johnson_lab/free_walking/Predictions_3D_20260114-145343/"
-xml_dir: "/home/eabe/Research/MyRepos/3d_tracking_dataset/assets/fruitfly_v1/"
+# Input/output paths (resolved from paths config)
+data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
+save_path: "${paths.data_dir}"
+xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
 
-continuous: False
-enable_padding: True
-n_fit_frames: 601
-n_frames_per_clip: 601
-skip_fit_offsets: False
-skip_ik_only: False
-infer_qvels: True 
+# Output filenames
+fit_offsets_path: "${dataset.stac_ik.fit_offsets_filename}"
+ik_only_path: "${dataset.stac_ik.ik_only_filename}"
 
-mujoco:
-  solver: "cg"
-  iterations: 1
-  ls_iterations: 4
-  dt: 0.00333
+# STAC IK parameters (from dataset config)
+continuous: ${dataset.stac_ik.continuous}
+enable_padding: ${dataset.stac_ik.enable_padding}
+n_fit_frames: ${dataset.stac_ik.n_fit_frames}
+n_frames_per_clip: ${dataset.stac_ik.n_frames_per_clip}
+num_clips: 0  # Computed dynamically, placeholder for dataclass
+skip_fit_offsets: ${dataset.stac_ik.skip_fit_offsets}
+skip_ik_only: ${dataset.stac_ik.skip_ik_only}
+infer_qvels: ${dataset.stac_ik.infer_qvels}
+
+mujoco: ${dataset.stac_ik.mujoco}

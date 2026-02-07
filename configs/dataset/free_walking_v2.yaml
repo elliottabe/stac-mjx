@@ -1,0 +1,32 @@
+# @package _global_.dataset
+
+name: free_walking
+env_name: free_walking
+
+# Dataset version - V2 uses different preprocessed file
+version: Predictions_3D_20260114-145343
+
+# Preprocessing settings
+preprocessing:
+  input_filename: preprocessed_bout_v2.h5  # V2 uses different file
+  bouts_csv: null
+
+# STAC IK settings for V2 model
+stac_ik:
+  continuous: False
+  enable_padding: True
+  n_fit_frames: 601
+  n_frames_per_clip: 601
+  skip_fit_offsets: False
+  skip_ik_only: False
+  infer_qvels: True
+  
+  # Output filenames (V2 specific)
+  fit_offsets_filename: "Fruitfly_fit_V2_free.h5"
+  ik_only_filename: "Fruitfly_ik_V2_free.h5"
+  
+  mujoco:
+    solver: "cg"
+    iterations: 1
+    ls_iterations: 4
+    dt: 0.00125

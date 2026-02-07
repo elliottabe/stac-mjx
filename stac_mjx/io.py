@@ -55,6 +55,7 @@ class MujocoConfig:
     solver: str  # Solver to use ('cg' or 'newton')
     iterations: int  # Number of solver iterations
     ls_iterations: int  # Number of line search iterations
+    dt: float  # Timestep for MuJoCo simulation
 
 
 @dataclass
@@ -72,6 +73,11 @@ class StacConfig:
     n_frames_per_clip: int  # Number of frames per clip
     mujoco: MujocoConfig  # Configuration for Mujoco
     continuous: bool  # Whether the data is continuous (to allow for edge effects post-processing)
+    
+    # Optional fields used by pipeline scripts (not core STAC algorithm)
+    save_path: str = ""  # Base save directory (used by run_stac scripts)
+    xml_dir: str = ""  # Directory containing XML model files (used by run_stac scripts)
+    enable_padding: bool = False  # Whether to pad clips to same length (preprocessing setting)
 
 
 @dataclass
@@ -317,7 +323,10 @@ def load_stac_data(file_path) -> tuple[Config, StacData]:
         # Load config from YAML string
         config_yaml = f["config"][()].decode("utf-8")
         config = OmegaConf.create(config_yaml)
-        config = OmegaConf.structured(Config(**config))
+        # Only extract model and stac fields for Config dataclass
+        # (config may have additional fields like dataset_name, version, paths, etc.)
+        config_filtered = {"model": config["model"], "stac": config["stac"]}
+        config = OmegaConf.structured(Config(**config_filtered))
 
         # Load additional values
         kp_names = [name.decode("utf-8") for name in f["kp_names"]]
