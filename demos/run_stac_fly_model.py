@@ -149,7 +149,7 @@ def parse_hydra_config(cfg: DictConfig):
     print("=" * 80)
     data_path = save_path / cfg.stac["ik_only_path"]
     n_frames = min(1000, kp_data.shape[0])  # Render up to 1000 frames
-    video_dir = data_path / f"{cfg.dataset.name}_{cfg.anatomy.name}.mp4"
+    video_dir = data_path.parent / f"{cfg.dataset.name}_{cfg.anatomy.name}.mp4"
 
     frames = stac_mjx.viz_stac(
         data_path,

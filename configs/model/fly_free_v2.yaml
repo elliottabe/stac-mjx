@@ -86,38 +86,38 @@ KEYPOINT_MODEL_PAIRS:
   T1L_FeTi: tibia_T1_left
   T1L_TiTa: tarsus1_T1_left
   T1L_TaT1: tarsus2_T1_left
-  T1L_TaT3: tarsus3_T1_left
+  T1L_TaT3: tarsus4_T1_left
   T1L_TaTip: tarsal_claw_T1_left
   T1R_ThxCx: coxa_T1_right
   T1R_Tro: femur_T1_right
   T1R_FeTi: tibia_T1_right
   T1R_TiTa: tarsus1_T1_right
   T1R_TaT1: tarsus2_T1_right
-  T1R_TaT3: tarsus3_T1_right
+  T1R_TaT3: tarsus4_T1_right
   T1R_TaTip: tarsal_claw_T1_right
   T2L_Tro: femur_T2_left
   T2L_FeTi: tibia_T2_left
   T2L_TiTa: tarsus1_T2_left
   T2L_TaT1: tarsus2_T2_left
-  T2L_TaT3: tarsus3_T2_left
+  T2L_TaT3: tarsus4_T2_left
   T2L_TaTip: tarsal_claw_T2_left
   T2R_Tro: femur_T2_right
   T2R_FeTi: tibia_T2_right
   T2R_TiTa: tarsus1_T2_right
   T2R_TaT1: tarsus2_T2_right
-  T2R_TaT3: tarsus3_T2_right
+  T2R_TaT3: tarsus4_T2_right
   T2R_TaTip: tarsal_claw_T2_right
   T3L_Tro: femur_T3_left
   T3L_FeTi: tibia_T3_left
   T3L_TiTa: tarsus1_T3_left
   T3L_TaT1: tarsus2_T3_left
-  T3L_TaT3: tarsus3_T3_left
+  T3L_TaT3: tarsus4_T3_left
   T3L_TaTip: tarsal_claw_T3_left
   T3R_Tro: femur_T3_right
   T3R_FeTi: tibia_T3_right
   T3R_TiTa: tarsus1_T3_right
   T3R_TaT1: tarsus2_T3_right
-  T3R_TaT3: tarsus3_T3_right
+  T3R_TaT3: tarsus4_T3_right
   T3R_TaTip: tarsal_claw_T3_right
 
 # The initial offsets for each keypoint in meters.
