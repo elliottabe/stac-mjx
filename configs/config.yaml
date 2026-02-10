@@ -13,12 +13,15 @@ restore_checkpoint: ''
 defaults:
   - _self_
   - anatomy: v1
-  - stac: stac_fly_free
   - paths: workstation
-  - model: fly_free
   - dataset: free_walking
   # - train: imitation
 
+# Interpolation bridges: expose anatomy.model and dataset.stac at top level
+# so Python code can access cfg.model.* and cfg.stac.* unchanged.
+# To override for special cases (e.g. courtship), use: +model=fly_free_courtship
+model: ${anatomy.model}
+stac: ${dataset.stac}
 
 # set the directory where the output files get saved
 hydra:

@@ -71,7 +71,7 @@ def run_stac(
     fit_offsets_path = save_path / cfg.stac.fit_offsets_path
     ik_only_path = save_path / cfg.stac.ik_only_path
 
-    xml_path = base_path / cfg.model.MJCF_PATH
+    xml_path = cfg.model.MJCF_PATH
 
     stac = Stac(xml_path, cfg, kp_names)
 

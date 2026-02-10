@@ -8,23 +8,30 @@ version: Jan_23
 
 # Preprocessing settings
 preprocessing:
-  input_filename: preprocessed_bout.h5
+  input_filename: preprocessed_bout_${anatomy.name}.h5
   bouts_csv: null
 
-# STAC IK settings
-stac_ik:
+# STAC pipeline config (merged from stac/stac_fly_courtship.yaml and stac_ik)
+stac:
+  # Input/output paths
+  data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
+  save_path: "${paths.data_dir}"
+  xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
+
+  # STAC IK parameters
   continuous: False
   enable_padding: True
   n_fit_frames: 500
   n_frames_per_clip: 500
+  num_clips: 0  # Computed dynamically
   skip_fit_offsets: False
   skip_ik_only: False
   infer_qvels: True
-  
+
   # Output filenames (saved to data_dir)
-  fit_offsets_filename: "Fruitfly_fit_V1_courtship.h5"
-  ik_only_filename: "Fruitfly_ik_V1_courtship.h5"
-  
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_courtship.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_courtship.h5"
+
   mujoco:
     solver: "cg"
     iterations: 1

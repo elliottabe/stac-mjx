@@ -295,7 +295,7 @@ def save_data_to_h5(
     with h5py.File(file_path, "w") as f:
         # Save config as a YAML string with all interpolations resolved
         # This ensures the saved config is self-contained and doesn't reference
-        # external keys like ${dataset.stac_ik.mujoco} that won't exist when loaded
+        # external keys like ${dataset.stac.mujoco} that won't exist when loaded
         config_resolved = OmegaConf.to_container(config, resolve=True)
         config_yaml = OmegaConf.to_yaml(config_resolved)
         f.create_dataset("config", data=np.bytes_(config_yaml))

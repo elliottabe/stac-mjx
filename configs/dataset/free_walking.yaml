@@ -5,28 +5,35 @@ env_name: free_walking
 
 # Dataset version - typically a timestamp or identifier
 # This gets interpolated into paths for organizing different data versions
-version: Predictions_3D_20260114-145343
+version: Data_analysis
 
 # Preprocessing settings
 # These determine which preprocessed file to load for STAC IK
 preprocessing:
-  input_filename: preprocessed_bout_v1.h5  # Output from preprocess_keypoints_for_ik.py
+  input_filename: preprocessed_bout_${anatomy.name}.h5  # Output from preprocess_keypoints_for_ik.py
   bouts_csv: null  # Optional: if you want to process specific bouts
 
-# STAC IK settings
-stac_ik:
+# STAC pipeline config (merged from stac/stac_fly_free.yaml and stac_ik)
+stac:
+  # Input/output paths
+  data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
+  save_path: "${paths.data_dir}"
+  xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
+
+  # STAC IK parameters
   continuous: False
   enable_padding: True
   n_fit_frames: 601
   n_frames_per_clip: 601
+  num_clips: 0  # Computed dynamically
   skip_fit_offsets: False
   skip_ik_only: False
   infer_qvels: True
-  
+
   # Output filenames (saved to data_dir)
-  fit_offsets_filename: "Fruitfly_fit_V1_free.h5"
-  ik_only_filename: "Fruitfly_ik_V1_free.h5"
-  
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_free.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_free.h5"
+
   mujoco:
     solver: "cg"
     iterations: 1

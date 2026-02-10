@@ -4,27 +4,34 @@ name: free_walking
 env_name: free_walking
 
 # Dataset version - V2 uses different preprocessed file
-version: Predictions_3D_20260114-145343
+version: Data_analysis
 
 # Preprocessing settings
 preprocessing:
-  input_filename: preprocessed_bout_v2.h5  # V2 uses different file
+  input_filename: preprocessed_bout_${anatomy.name}  # V2 uses different file
   bouts_csv: null
 
-# STAC IK settings for V2 model
-stac_ik:
+# STAC pipeline config (merged from stac/stac_fly_free_v2.yaml and stac_ik)
+stac:
+  # Input/output paths
+  data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
+  save_path: "${paths.data_dir}"
+  xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
+
+  # STAC IK parameters for V2 model
   continuous: False
   enable_padding: True
   n_fit_frames: 601
   n_frames_per_clip: 601
+  num_clips: 0  # Computed dynamically
   skip_fit_offsets: False
   skip_ik_only: False
   infer_qvels: True
-  
+
   # Output filenames (V2 specific)
-  fit_offsets_filename: "Fruitfly_fit_V2_free.h5"
-  ik_only_filename: "Fruitfly_ik_V2_free.h5"
-  
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_free.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_free.h5"
+
   mujoco:
     solver: "cg"
     iterations: 1
