@@ -26,7 +26,7 @@ import stac_mjx.io_dict_to_hdf5 as ioh5
 from stac_mjx.path_utils import convert_dict_to_path, register_custom_resolvers
 register_custom_resolvers()
 
-@hydra.main(version_base=None, config_path="../configs", config_name="config")
+@hydra.main(version_base=None, config_path="./configs", config_name="config")
 def parse_hydra_config(cfg: DictConfig):
     """
     Run STAC IK pipeline on preprocessed keypoint data.
@@ -87,16 +87,18 @@ def parse_hydra_config(cfg: DictConfig):
         
     elif 'bout_001' in bout_dict or 'bout_0' in bout_dict:
         # Multi-bout format - concatenate all bouts
-        print(f"Detected multi-bout format with {len(bout_dict)} bouts")
+        # Filter out non-bout keys (like 'info')
+        bout_keys = [k for k in bout_dict.keys() if k.startswith('bout_')]
+        print(f"Detected multi-bout format with {len(bout_keys)} bouts")
         
         # Get keypoint names from first bout
-        first_key = list(bout_dict.keys())[0]
+        first_key = bout_keys[0]
         sorted_kp_names = bout_dict[first_key]['kp_names']
         
         # Collect all clips
         clips = []
         max_length = 0
-        for nbout, key in enumerate(sorted(bout_dict.keys())):
+        for nbout, key in enumerate(sorted(bout_keys)):
             bout_data = bout_dict[key]['keypoints']
             bout_data = bout_data.reshape(bout_data.shape[0], -1)
             clips.append(bout_data)
