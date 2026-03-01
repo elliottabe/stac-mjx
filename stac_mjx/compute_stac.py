@@ -183,6 +183,7 @@ def pose_optimization(
     ub: jp.ndarray,
     site_idxs: jp.ndarray,
     indiv_parts: List[jp.ndarray],
+    kp_weights: jp.ndarray = None,
 ) -> Tuple:
     """Perform q_phase over the entire clip.
 
@@ -194,6 +195,7 @@ def pose_optimization(
         ub (jp.ndarray): Array of upper bounds for corresponding qpos elements
         site_idxs (jp.ndarray): Array of indices of offset sites
         indiv_parts (List[jp.ndarray]): List of joints to optimize, used in individual part optimization
+        kp_weights (jp.ndarray, optional): Per-keypoint weights for the loss (repeated 3x for xyz). Defaults to uniform 1.0.
 
     Returns:
         Tuple: Updated mjx.Data, optimized qpos, offset site xpos, mjx.Data.xpos for each frame, and info for logging (optimization time and errors)
@@ -207,7 +209,7 @@ def pose_optimization(
     # Iterate through all of the frames
     frames = jp.arange(kp_data.shape[0])
 
-    kps_to_opt = jp.ones(kp_data.shape[1], dtype=bool)
+    kps_to_opt = kp_weights if kp_weights is not None else jp.ones(kp_data.shape[1])
     qs_to_opt = jp.ones(mjx_model.nq, dtype=bool)
     print("Pose Optimization:")
 

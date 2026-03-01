@@ -120,6 +120,14 @@ class Stac:
             [n in self.cfg.model.TRUNK_OPTIMIZATION_KEYPOINTS for n in kp_names],
         )
 
+        # Build per-keypoint weights for IK loss (repeated 3x for x,y,z).
+        # Falls back to uniform 1.0 if KEYPOINT_WEIGHTS not in config.
+        kp_weight_cfg = self.cfg.model.get("KEYPOINT_WEIGHTS", {})
+        self._kp_weights = jp.repeat(
+            jp.array([float(kp_weight_cfg.get(n, 1.0)) for n in kp_names]),
+            3,
+        )
+
         self._mj_model.opt.solver = {
             "cg": mujoco.mjtSolver.mjSOL_CG,
             "newton": mujoco.mjtSolver.mjSOL_NEWTON,
@@ -277,6 +285,7 @@ class Stac:
                     self._ub,
                     self._body_site_idxs,
                     self._indiv_parts,
+                    self._kp_weights,
                 )
             )
 
@@ -311,6 +320,7 @@ class Stac:
                 self._ub,
                 self._body_site_idxs,
                 self._indiv_parts,
+                self._kp_weights,
             )
         )
 
@@ -408,7 +418,7 @@ class Stac:
         # q_phase - pose
         vmap_pose_opt = jax.vmap(
             compute_stac.pose_optimization,
-            in_axes=(None, 0, 0, 0, None, None, None, None),
+            in_axes=(None, 0, 0, 0, None, None, None, None, None),
         )
         mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error = (
             vmap_pose_opt(
@@ -420,6 +430,7 @@ class Stac:
                 self._ub,
                 self._body_site_idxs,
                 self._indiv_parts,
+                self._kp_weights,
             )
         )
 

@@ -174,7 +174,7 @@ model:
 
   # Number of alternating pose and offset optimization rounds.
   N_ITERS: 6
-  N_ITER_Q: 1000
+  N_ITER_Q: 500
   N_ITER_M: 2000
 
   KP_NAMES:
@@ -296,14 +296,14 @@ model:
     WingR_V13: -0.02 0.26 0.02
     Abd_A4: 0 0.015 0.025
     Abd_tip: 0 0.035 0
-    T1L_ThxCx: 0. 0. 0.
+    T1L_ThxCx: 0 0.02 0
     T1L_Tro: 0. 0. 0.
     T1L_FeTi: 0. 0. 0.
     T1L_TiTa: 0. 0. 0.
     T1L_TaT1: 0. 0. 0.
     T1L_TaT3: 0. 0. 0.
     T1L_TaTip: 0 0.005 0
-    T1R_ThxCx: 0. 0. 0.
+    T1R_ThxCx: 0 0.02 0
     T1R_Tro: 0. 0. 0.
     T1R_FeTi: 0. 0. 0.
     T1R_TiTa: 0. 0. 0.
@@ -421,6 +421,8 @@ model:
     - WingL_V13
     - WingR_V12
     - WingR_V13
+    - T1L_ThxCx
+    - T1R_ThxCx
     - T1L_TaTip
     - T2L_TaTip
     - T3L_TaTip
@@ -435,3 +437,59 @@ model:
   # If you have reason to believe that the initial offsets are correct for particular keypoints,
   # you can regularize those sites using _SITES_TO_REGULARIZE.
   M_REG_COEF: 1
+
+  # Per-keypoint weights for the IK loss. Higher weights on proximal leg
+  # keypoints counteract the leverage bias where distal keypoints dominate
+  # due to larger positional errors for the same angular error.
+  # Proximal (ThxCx, Tro): 2.0, Mid (FeTi, TiTa): 1.0, Distal (TaT1, TaT3, TaTip): 0.5
+  KEYPOINT_WEIGHTS:
+    Scutellum: 1.0
+    WingL_base: 1.0
+    WingR_base: 1.0
+    Antenna_Base: 1.0
+    EyeL: 1.0
+    EyeR: 1.0
+    WingL_V12: 1.0
+    WingL_V13: 1.0
+    WingR_V12: 1.0
+    WingR_V13: 1.0
+    Abd_A4: 1.0
+    Abd_tip: 1.0
+    T1L_ThxCx: 2.0
+    T1L_Tro: 2.0
+    T1L_FeTi: 1.0
+    T1L_TiTa: 1.0
+    T1L_TaT1: 0.5
+    T1L_TaT3: 0.5
+    T1L_TaTip: 0.5
+    T1R_ThxCx: 2.0
+    T1R_Tro: 2.0
+    T1R_FeTi: 1.0
+    T1R_TiTa: 1.0
+    T1R_TaT1: 0.5
+    T1R_TaT3: 0.5
+    T1R_TaTip: 0.5
+    T2L_Tro: 2.0
+    T2L_FeTi: 1.0
+    T2L_TiTa: 1.0
+    T2L_TaT1: 0.5
+    T2L_TaT3: 0.5
+    T2L_TaTip: 0.5
+    T2R_Tro: 2.0
+    T2R_FeTi: 1.0
+    T2R_TiTa: 1.0
+    T2R_TaT1: 0.5
+    T2R_TaT3: 0.5
+    T2R_TaTip: 0.5
+    T3L_Tro: 2.0
+    T3L_FeTi: 1.0
+    T3L_TiTa: 1.0
+    T3L_TaT1: 0.5
+    T3L_TaT3: 0.5
+    T3L_TaTip: 0.5
+    T3R_Tro: 2.0
+    T3R_FeTi: 1.0
+    T3R_TiTa: 1.0
+    T3R_TaT1: 0.5
+    T3R_TaT3: 0.5
+    T3R_TaTip: 0.5
