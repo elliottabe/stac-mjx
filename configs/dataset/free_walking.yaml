@@ -10,7 +10,7 @@ version: Data_analysis
 # Preprocessing settings
 # These determine which preprocessed file to load for STAC IK
 preprocessing:
-  input_filename: preprocessed_bout_${anatomy.name}.h5  # Output from preprocess_keypoints_for_ik.py
+  input_filename: preprocessed_bout_${anatomy.name}_${dataset.name}.h5 # Output from preprocess_keypoints_for_ik.py
   bouts_csv: null  # Optional: if you want to process specific bouts
 
 # STAC pipeline config (merged from stac/stac_fly_free.yaml and stac_ik)
@@ -31,8 +31,8 @@ stac:
   infer_qvels: True
 
   # Output filenames (saved to data_dir)
-  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_free.h5"
-  ik_only_path: "Fruitfly_ik_${anatomy.name}_free.h5"
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_${dataset.name}.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_${dataset.name}.h5"
 
   mujoco:
     solver: "cg"

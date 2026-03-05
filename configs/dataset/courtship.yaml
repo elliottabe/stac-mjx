@@ -4,11 +4,11 @@ name: courtship
 env_name: courtship
 
 # Dataset version
-version: Jan_23
+version: Data_analysis
 
 # Preprocessing settings
 preprocessing:
-  input_filename: preprocessed_bout_${anatomy.name}.h5
+  input_filename: preprocessed_bout_${anatomy.name}_${dataset.name}.h5
   bouts_csv: null
 
 # STAC pipeline config (merged from stac/stac_fly_courtship.yaml and stac_ik)
@@ -24,13 +24,13 @@ stac:
   n_fit_frames: 500
   n_frames_per_clip: 500
   num_clips: 0  # Computed dynamically
-  skip_fit_offsets: False
+  skip_fit_offsets: True
   skip_ik_only: False
   infer_qvels: True
 
   # Output filenames (saved to data_dir)
-  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_courtship.h5"
-  ik_only_path: "Fruitfly_ik_${anatomy.name}_courtship.h5"
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_${dataset.name}.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_${dataset.name}.h5"
 
   mujoco:
     solver: "cg"

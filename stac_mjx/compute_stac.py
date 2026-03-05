@@ -6,7 +6,6 @@ import numpy as np
 import mujoco
 from typing import Tuple, List
 import time
-
 from stac_mjx import stac_core
 from stac_mjx import utils
 
@@ -59,6 +58,8 @@ def root_optimization(
     qs_to_opt = qs_to_opt.at[:root_dims].set(True)
     kps_to_opt = jp.repeat(trunk_kps, 3)
 
+    no_reg = jp.zeros(mjx_model.nq)  # no joint regularization for root optimization
+
     mjx_data, res = stac_core_obj.q_opt(
         mjx_model,
         mjx_data,
@@ -69,6 +70,7 @@ def root_optimization(
         lb,
         ub,
         site_idxs,
+        no_reg,
     )
 
     mjx_data = utils.replace_qs(
@@ -89,6 +91,7 @@ def root_optimization(
         lb,
         ub,
         site_idxs,
+        no_reg,
     )
 
     mjx_data = utils.replace_qs(
@@ -184,6 +187,7 @@ def pose_optimization(
     site_idxs: jp.ndarray,
     indiv_parts: List[jp.ndarray],
     kp_weights: jp.ndarray = None,
+    q_reg_weights: jp.ndarray = None,
 ) -> Tuple:
     """Perform q_phase over the entire clip.
 
@@ -196,20 +200,18 @@ def pose_optimization(
         site_idxs (jp.ndarray): Array of indices of offset sites
         indiv_parts (List[jp.ndarray]): List of joints to optimize, used in individual part optimization
         kp_weights (jp.ndarray, optional): Per-keypoint weights for the loss (repeated 3x for xyz). Defaults to uniform 1.0.
+        q_reg_weights (jp.ndarray, optional): Per-qpos L2 regularization weights toward rest (q=0). Defaults to zeros.
 
     Returns:
         Tuple: Updated mjx.Data, optimized qpos, offset site xpos, mjx.Data.xpos for each frame, and info for logging (optimization time and errors)
     """
     s = time.time()
-    qposes = []
-    xposes = []
-    xquats = []
-    marker_sites = []
 
     # Iterate through all of the frames
     frames = jp.arange(kp_data.shape[0])
 
     kps_to_opt = kp_weights if kp_weights is not None else jp.ones(kp_data.shape[1])
+    _q_reg = q_reg_weights if q_reg_weights is not None else jp.zeros(mjx_model.nq)
     qs_to_opt = jp.ones(mjx_model.nq, dtype=bool)
     print("Pose Optimization:")
 
@@ -227,6 +229,7 @@ def pose_optimization(
             lb,
             ub,
             site_idxs,
+            _q_reg,
         )
 
         mjx_data = utils.replace_qs(mjx_model, mjx_data, res.params)
@@ -244,6 +247,7 @@ def pose_optimization(
                 lb,
                 ub,
                 site_idxs,
+                _q_reg,
             )
 
             mjx_data = utils.replace_qs(
@@ -252,26 +256,31 @@ def pose_optimization(
 
         return mjx_data, res.state.error
 
-    # Optimize over each frame, storing all the results
-    frame_time = []
-    frame_error = []
-    for n_frame in frames:
-        loop_start = time.time()
-
+    # Optimize over each frame using lax.scan to avoid Python loop unrolling.
+    # A Python for-loop over frames inside jax.vmap causes JAX to unroll all
+    # iterations into the computation graph at trace time, which makes XLA
+    # compilation take hours for typical clip lengths (e.g. 601 frames).
+    # jax.lax.scan compiles the loop body once and runs it as a device loop.
+    def scan_fn(mjx_data, n_frame):
         mjx_data, error = f(mjx_data, kp_data, n_frame, indiv_parts)
+        outputs = (
+            mjx_data.qpos[:],
+            mjx_data.xpos[:],
+            mjx_data.xquat[:],
+            utils.get_site_xpos(mjx_data, site_idxs),
+            error,
+        )
+        return mjx_data, outputs
 
-        qposes.append(mjx_data.qpos[:])
-        xposes.append(mjx_data.xpos[:])
-        xquats.append(mjx_data.xquat[:])
-        marker_sites.append(utils.get_site_xpos(mjx_data, site_idxs))
-
-        frame_time.append(time.time() - loop_start)
-        frame_error.append(error)
+    mjx_data, (qposes, xposes, xquats, marker_sites, frame_error) = jax.lax.scan(
+        scan_fn, mjx_data, frames
+    )
+    frame_time = []  # per-frame wall-clock timing is not meaningful inside traced JAX code
 
     print(f"Pose Optimization finished in {(time.time() - s) / 60.0:.2f} minutes")
     return (
         mjx_data,
-        jp.array(qposes),
+        qposes,
         xposes,
         xquats,
         marker_sites,

@@ -467,6 +467,26 @@ model:
   # you can regularize those sites using _SITES_TO_REGULARIZE.
   M_REG_COEF: 1
 
+  # Per-joint L2 regularization toward rest pose (q=0) applied during pose optimization.
+  # Helps multi-axis joints (e.g. T1 coxa ball joints) avoid degenerate solutions.
+  # Keys are joint names from the MJCF; values are L2 regularization coefficients.
+  # Unspecified joints default to 0.0 (no regularization).
+  # Example: {T1L_coxa: 0.001, T1R_coxa: 0.001}
+  JOINT_REG_WEIGHTS: 
+    coxa_T1_left: 0.001
+    coxa_T1_right: 0.001
+    coxa_T2_left: 0.001
+    coxa_T2_right: 0.001
+    coxa_T3_left: 0.001
+    coxa_T3_right: 0.001
+
+  # Fixed step size for the ProjectedGradient q optimizer.
+  # stepsize > 0 disables Armijo/FISTA line search (a nested while_loop that does
+  # up to 30 extra kinematics evaluations per gradient step — very slow inside
+  # jax.lax.scan). A fixed step gives ~30x fewer evaluations per iteration.
+  # Set to 0.0 to restore line search (accurate but slow). Tune if quality degrades.
+  STEPSIZE_Q: 5.0e-04
+
   # Per-keypoint weights for the IK loss. Higher weights on proximal leg
   # keypoints counteract the leverage bias where distal keypoints dominate
   # due to larger positional errors for the same angular error.

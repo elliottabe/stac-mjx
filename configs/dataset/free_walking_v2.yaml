@@ -8,7 +8,7 @@ version: Data_analysis
 
 # Preprocessing settings
 preprocessing:
-  input_filename: preprocessed_bout_${anatomy.name}  # V2 uses different file
+  input_filename: preprocessed_bout_${anatomy.name}_${dataset.name}.h5
   bouts_csv: null
 
 # STAC pipeline config (merged from stac/stac_fly_free_v2.yaml and stac_ik)
@@ -29,8 +29,8 @@ stac:
   infer_qvels: True
 
   # Output filenames (V2 specific)
-  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_free.h5"
-  ik_only_path: "Fruitfly_ik_${anatomy.name}_free.h5"
+  fit_offsets_path: "Fruitfly_fit_${anatomy.name}_${dataset.name}.h5"
+  ik_only_path: "Fruitfly_ik_${anatomy.name}_${dataset.name}.h5"
 
   mujoco:
     solver: "cg"

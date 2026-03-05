@@ -23,6 +23,7 @@ def q_loss(
     kps_to_opt: jp.ndarray,
     initial_q: jp.ndarray,
     site_idxs: jp.ndarray,
+    q_reg_weights: jp.ndarray,
 ) -> float:
     """Compute the marker loss for q_phase optimization.
 
@@ -34,9 +35,11 @@ def q_loss(
         qs_to_opt (jp.ndarray): Boolean array; for each index in qpos, True = q and False = initial_q when calculating residual
         kps_to_opt (jp.ndarray): Boolean array; only return residuals for the True positions
         initial_q (jp.ndarray): Starting qs for reference
+        q_reg_weights (jp.ndarray): Per-qpos L2 regularization weights toward rest (q=0).
+            Masked by qs_to_opt so only currently-optimized joints are penalized.
 
     Returns:
-        float: sum of squares scalar loss
+        float: sum of squares scalar loss plus joint regularization
     """
     # Replace qpos with new qpos with q and initial_q, based on qs_to_opt
     mjx_data = mjx_data.replace(qpos=utils.make_qs(initial_q, qs_to_opt, q))
@@ -54,9 +57,13 @@ def q_loss(
 
     # Set irrelevant body sites to 0
     residual = residual * kps_to_opt
-    residual = squared_error(residual)
+    kp_loss = squared_error(residual)
 
-    return residual
+    # Per-joint L2 regularization toward rest pose (q=0), masked to joints
+    # currently being optimized so fixed joints are not spuriously pulled.
+    q_reg = jp.sum(q_reg_weights * qs_to_opt * jp.square(q))
+
+    return kp_loss + q_reg
 
 
 @jit
@@ -154,6 +161,7 @@ def _q_opt(
     lb,
     ub,
     site_idxs,
+    q_reg_weights: jp.ndarray,
 ):
     """Update q_pose using estimated marker parameters."""
     try:
@@ -167,6 +175,7 @@ def _q_opt(
             kps_to_opt=kps_to_opt,
             initial_q=q0,
             site_idxs=site_idxs,
+            q_reg_weights=q_reg_weights,
         )
 
     except ValueError as ex:
@@ -232,19 +241,24 @@ class StacCore:
         tol (float): Tolerance for the q_solver.
     """
 
-    def __init__(self, tol=1e-5, n_iter_q=400, n_iter_m=2000):
+    def __init__(self, tol=1e-5, n_iter_q=400, n_iter_m=2000, stepsize_q=0.0):
         """Initialze StacCore with 'q_solver' and 'm_solver'.
 
         Args:
             tol (float): Tolerance value for ProjectedGradient 'q_solver'.
             n_iter_q (int): Number of iterations for q optimization.
             n_iter_m (int): Number of iterations for m optimization.
+            stepsize_q (float): Fixed step size for q optimizer. If > 0, disables the
+                FISTA backtracking line search (a nested while_loop that runs up to 30
+                extra kinematics evaluations per gradient step — very slow inside
+                jax.lax.scan). Set to 0.0 to restore line search. Default: 0.0.
         """
         self.opt = optax.sgd(learning_rate=5e-4, momentum=0.9, nesterov=False)
 
         # TODO: make maxiter a config parameter
         self.q_solver = ProjectedGradient(
-            fun=q_loss, projection=projection_box, maxiter=n_iter_q, tol=tol
+            fun=q_loss, projection=projection_box, maxiter=n_iter_q, tol=tol,
+            stepsize=stepsize_q,
         )
         self.m_solver = OptaxSolver(opt=self.opt, fun=m_loss, maxiter=n_iter_m)
 
@@ -259,6 +273,7 @@ class StacCore:
         lb,
         ub,
         site_idxs,
+        q_reg_weights: jp.ndarray,
     ):
         """Updates q_pose using estimated marker parameters.
 
@@ -276,6 +291,7 @@ class StacCore:
             lb,
             ub,
             site_idxs,
+            q_reg_weights,
         )
 
     def m_opt(

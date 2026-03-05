@@ -128,6 +128,14 @@ class Stac:
             3,
         )
 
+        # Build per-qpos joint regularization weights toward rest pose (q=0).
+        # Uses _part_names which maps each qpos index to its joint name.
+        # Falls back to 0.0 (no regularization) if JOINT_REG_WEIGHTS not in config.
+        q_reg_cfg = self.cfg.model.get("JOINT_REG_WEIGHTS", {})
+        self._q_reg_weights = jp.array(
+            [float(q_reg_cfg.get(name, 0.0)) for name in self._part_names]
+        )
+
         self._mj_model.opt.solver = {
             "cg": mujoco.mjtSolver.mjSOL_CG,
             "newton": mujoco.mjtSolver.mjSOL_NEWTON,
@@ -147,7 +155,10 @@ class Stac:
 
         # Create Stac_Core object
         self.stac_core_obj = stac_core.StacCore(
-            self.cfg.model.FTOL, self.cfg.model.N_ITER_Q, self.cfg.model.N_ITER_M
+            self.cfg.model.FTOL,
+            self.cfg.model.N_ITER_Q,
+            self.cfg.model.N_ITER_M,
+            self.cfg.model.get("STEPSIZE_Q", 0.0),
         )
 
     def part_opt_setup(self):
@@ -286,6 +297,7 @@ class Stac:
                     self._body_site_idxs,
                     self._indiv_parts,
                     self._kp_weights,
+                    self._q_reg_weights,
                 )
             )
 
@@ -321,6 +333,7 @@ class Stac:
                 self._body_site_idxs,
                 self._indiv_parts,
                 self._kp_weights,
+                self._q_reg_weights,
             )
         )
 
@@ -418,7 +431,7 @@ class Stac:
         # q_phase - pose
         vmap_pose_opt = jax.vmap(
             compute_stac.pose_optimization,
-            in_axes=(None, 0, 0, 0, None, None, None, None, None),
+            in_axes=(None, 0, 0, 0, None, None, None, None, None, None),
         )
         mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error = (
             vmap_pose_opt(
@@ -431,6 +444,7 @@ class Stac:
                 self._body_site_idxs,
                 self._indiv_parts,
                 self._kp_weights,
+                self._q_reg_weights,
             )
         )
 

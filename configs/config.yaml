@@ -4,7 +4,7 @@ dataset_name: ${dataset.name}
 ##### Easy Access Variables #####
 # Version can be overridden via CLI: version=Predictions_3D_20260203-103416
 version: ${dataset.version}
-run_id: 'Testing'
+run_id: 'analysis'
 load_jobid: ''
 note: ''
 restore_checkpoint: ''
