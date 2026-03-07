@@ -1,4 +1,0 @@
-defaults:
-  - stac: stac_celegans
-  - model: celegans
-  - _self_

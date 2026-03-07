@@ -332,19 +332,19 @@ model:
     T1L_TaT1: 0. 0. 0.
     T1L_TaT3: 0. 0. 0.
     T1L_TaTip: 0 0.005 0
-    T1R_ThxCx: 0 0.02 0
+    T1R_ThxCx: 0 -0.02 0
     T1R_Tro: 0. 0. 0.
     T1R_FeTi: 0. 0. 0.
     T1R_TiTa: 0. 0. 0.
     T1R_TaT1: 0. 0. 0.
-    T1R_TaT3: 0 0.005 0
-    T1R_TaTip: 0. 0. 0.
+    T1R_TaT3: 0. 0. 0.
+    T1R_TaTip: 0 -0.005 0
     T2L_Tro: 0. 0. 0.
     T2L_FeTi: 0. 0. 0.
     T2L_TiTa: 0. 0. 0.
     T2L_TaT1: 0. 0. 0.
-    T2L_TaT3: 0 0.005 0
-    T2L_TaTip: 0. 0. 0.
+    T2L_TaT3: 0. 0. 0.
+    T2L_TaTip: 0 0.005 0
     T2R_Tro: 0. 0. 0.
     T2R_FeTi: 0. 0. 0.
     T2R_TiTa: 0. 0. 0.
@@ -362,19 +362,22 @@ model:
     T3R_TiTa: 0. 0. 0.
     T3R_TaT1: 0. 0. 0.
     T3R_TaT3: 0. 0. 0.
-    T3R_TaTip: 0 -0.005 0
+    T3R_TaTip: 0 0.005 0
 
   ROOT_OPTIMIZATION_KEYPOINT: "Scutellum"
 
   TRUNK_OPTIMIZATION_KEYPOINTS: {}
 
   INDIVIDUAL_PART_OPTIMIZATION:
-    "T1L": ["coxa_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "claw_T1_left"]
-    "T1R": ["coxa_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "claw_T1_right"]
-    "T2L": ["coxa_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "claw_T2_left"]
-    "T2R": ["coxa_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "claw_T2_right"]
-    "T3L": ["coxa_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "claw_T3_left"]
-    "T3R": ["coxa_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "claw_T3_right"]
+    # Use actual MJCF joint names (not body names) — matched via substring against _part_names.
+    # All 3 coxa DOFs (flexion/twist/extension) and femur_twist are included so each leg's
+    # full joint chain is refined in the per-leg pass, not just in the global (all-joints) step.
+    "T1L": ["coxa_flexion_T1_left", "coxa_twist_T1_left", "coxa_T1_left", "femur_twist_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "tarsus4_T1_left", "tarsus5_T1_left"]
+    "T1R": ["coxa_flexion_T1_right", "coxa_twist_T1_right", "coxa_T1_right", "femur_twist_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "tarsus4_T1_right", "tarsus5_T1_right"]
+    "T2L": ["coxa_flexion_T2_left", "coxa_twist_T2_left", "coxa_T2_left", "femur_twist_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "tarsus4_T2_left", "tarsus5_T2_left"]
+    "T2R": ["coxa_flexion_T2_right", "coxa_twist_T2_right", "coxa_T2_right", "femur_twist_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "tarsus4_T2_right", "tarsus5_T2_right"]
+    "T3L": ["coxa_flexion_T3_left", "coxa_twist_T3_left", "coxa_T3_left", "femur_twist_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "tarsus4_T3_left", "tarsus5_T3_left"]
+    "T3R": ["coxa_flexion_T3_right", "coxa_twist_T3_right", "coxa_T3_right", "femur_twist_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "tarsus4_T3_right", "tarsus5_T3_right"]
 
   # Color to use for each keypoint when visualizing the results
   KEYPOINT_COLOR_PAIRS:
@@ -468,77 +471,92 @@ model:
   M_REG_COEF: 1
 
   # Per-joint L2 regularization toward rest pose (q=0) applied during pose optimization.
-  # Helps multi-axis joints (e.g. T1 coxa ball joints) avoid degenerate solutions.
+  # Helps multi-axis joints avoid degenerate solutions. Each coxa has 3 HINGE DOFs
+  # (extension, flexion, twist); all three must be regularized or the free DOFs compensate.
   # Keys are joint names from the MJCF; values are L2 regularization coefficients.
   # Unspecified joints default to 0.0 (no regularization).
-  # Example: {T1L_coxa: 0.001, T1R_coxa: 0.001}
-  JOINT_REG_WEIGHTS: 
-    coxa_T1_left: 0.001
-    coxa_T1_right: 0.001
-    coxa_T2_left: 0.001
-    coxa_T2_right: 0.001
-    coxa_T3_left: 0.001
-    coxa_T3_right: 0.001
+  JOINT_REG_WEIGHTS: {}
+    # Coxa extension (axis X)
+    # coxa_T1_left:  0.0001
+    # coxa_T1_right: 0.0001
+    # coxa_T2_left:  0.0001
+    # coxa_T2_right: 0.0001
+    # coxa_T3_left:  0.0001
+    # coxa_T3_right: 0.0001
+    # Coxa flexion/abduction (axis Z)
+    # coxa_flexion_T1_left:  0.001
+    # coxa_flexion_T1_right: 0.001
+    # coxa_flexion_T2_left:  0.001
+    # coxa_flexion_T2_right: 0.001
+    # coxa_flexion_T3_left:  0.001
+    # coxa_flexion_T3_right: 0.001
+    # # Coxa twist/yaw (axis Y)
+    # coxa_twist_T1_left:  0.001
+    # coxa_twist_T1_right: 0.001
+    # coxa_twist_T2_left:  0.001
+    # coxa_twist_T2_right: 0.001
+    # coxa_twist_T3_left:  0.001
+    # coxa_twist_T3_right: 0.001
 
   # Fixed step size for the ProjectedGradient q optimizer.
   # stepsize > 0 disables Armijo/FISTA line search (a nested while_loop that does
   # up to 30 extra kinematics evaluations per gradient step — very slow inside
   # jax.lax.scan). A fixed step gives ~30x fewer evaluations per iteration.
   # Set to 0.0 to restore line search (accurate but slow). Tune if quality degrades.
-  STEPSIZE_Q: 5.0e-04
+  STEPSIZE_Q: 0.0
 
   # Per-keypoint weights for the IK loss. Higher weights on proximal leg
   # keypoints counteract the leverage bias where distal keypoints dominate
   # due to larger positional errors for the same angular error.
   # Proximal (ThxCx, Tro): 2.0, Mid (FeTi, TiTa): 1.0, Distal (TaT1, TaT3, TaTip): 0.5
-  KEYPOINT_WEIGHTS:
-    Scutellum: 1.0
-    WingL_base: 1.0
-    WingR_base: 1.0
-    Antenna_Base: 1.0
-    EyeL: 1.0
-    EyeR: 1.0
-    WingL_V12: 1.0
-    WingL_V13: 1.0
-    WingR_V12: 1.0
-    WingR_V13: 1.0
-    Abd_A4: 1.0
-    Abd_tip: 1.0
-    T1L_ThxCx: 2.0
-    T1L_Tro: 2.0
-    T1L_FeTi: 1.0
-    T1L_TiTa: 1.0
-    T1L_TaT1: 0.5
-    T1L_TaT3: 0.5
-    T1L_TaTip: 0.5
-    T1R_ThxCx: 2.0
-    T1R_Tro: 2.0
-    T1R_FeTi: 1.0
-    T1R_TiTa: 1.0
-    T1R_TaT1: 0.5
-    T1R_TaT3: 0.5
-    T1R_TaTip: 0.5
-    T2L_Tro: 2.0
-    T2L_FeTi: 1.0
-    T2L_TiTa: 1.0
-    T2L_TaT1: 0.5
-    T2L_TaT3: 0.5
-    T2L_TaTip: 0.5
-    T2R_Tro: 2.0
-    T2R_FeTi: 1.0
-    T2R_TiTa: 1.0
-    T2R_TaT1: 0.5
-    T2R_TaT3: 0.5
-    T2R_TaTip: 0.5
-    T3L_Tro: 2.0
-    T3L_FeTi: 1.0
-    T3L_TiTa: 1.0
-    T3L_TaT1: 0.5
-    T3L_TaT3: 0.5
-    T3L_TaTip: 0.5
-    T3R_Tro: 2.0
-    T3R_FeTi: 1.0
-    T3R_TiTa: 1.0
-    T3R_TaT1: 0.5
-    T3R_TaT3: 0.5
-    T3R_TaTip: 0.5
+  KEYPOINT_WEIGHTS: {}
+    # Scutellum: 1.0
+    # WingL_base: 1.0
+    # WingR_base: 1.0
+    # Antenna_Base: 1.0
+    # EyeL: 1.0
+    # EyeR: 1.0
+    # WingL_V12: 1.0
+    # WingL_V13: 1.0
+    # WingR_V12: 1.0
+    # WingR_V13: 1.0
+    # Abd_A4: 1.0
+    # Abd_tip: 1.0
+    # T1L_ThxCx: 2.0
+    # T1L_Tro: 2.0
+    # T1L_FeTi: 1.0
+    # T1L_TiTa: 1.0
+    # T1L_TaT1: 0.5
+    # T1L_TaT3: 0.5
+    # T1L_TaTip: 0.5
+    # T1R_ThxCx: 2.0
+    # T1R_Tro: 2.0
+    # T1R_FeTi: 1.0
+    # T1R_TiTa: 1.0
+    # T1R_TaT1: 0.5
+    # T1R_TaT3: 0.5
+    # T1R_TaTip: 0.5
+    # T2L_Tro: 2.0
+    # T2L_FeTi: 1.0
+    # T2L_TiTa: 1.0
+    # T2L_TaT1: 0.5
+    # T2L_TaT3: 0.5
+    # T2L_TaTip: 0.5
+    # T2R_Tro: 2.0
+    # T2R_FeTi: 1.0
+    # T2R_TiTa: 1.0
+    # T2R_TaT1: 0.5
+    # T2R_TaT3: 0.5
+    # T2R_TaTip: 0.5
+    # T3L_Tro: 2.0
+    # T3L_FeTi: 1.0
+    # T3L_TiTa: 1.0
+    # T3L_TaT1: 0.5
+    # T3L_TaT3: 0.5
+    # T3L_TaTip: 0.5
+    # T3R_Tro: 2.0
+    # T3R_FeTi: 1.0
+    # T3R_TiTa: 1.0
+    # T3R_TaT1: 0.5
+    # T3R_TaT3: 0.5
+    # T3R_TaTip: 0.5
