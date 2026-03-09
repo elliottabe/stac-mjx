@@ -15,9 +15,8 @@ end_eff_names:
   - claw_T3_right
 
 body_names:
-  # V1 uses "tarsus" not "tarsus1", same trochanter structure
+  # V1 uses "tarsus" not "tarsus1"
   - coxa_T1_left
-  - trochanter_T1_left
   - femur_T1_left
   - tibia_T1_left
   - tarsus_T1_left
@@ -67,22 +66,6 @@ body_names:
   - claw_T3_right
 
 joint_names:
-  # Head and antenna joints
-  - head_abduct
-  - head_twist
-  - head
-  - antenna_abduct_left
-  - antenna_twist_left
-  - antenna_left
-  - antenna_abduct_right
-  - antenna_twist_right
-  - antenna_right
-  - rostrum
-  - haustellum_abduct
-  - haustellum
-  - labrum_left
-  - labrum_right
-
   # Wing joints (same as v2)
   - wing_yaw_left
   - wing_roll_left
@@ -115,10 +98,10 @@ joint_names:
   - femur_T1_left
   - tibia_T1_left
   - tarsus_T1_left
-  # - tarsus2_T1_left
-  # - tarsus3_T1_left
-  # - tarsus4_T1_left
-  # - tarsus5_T1_left
+  - tarsus2_T1_left
+  - tarsus3_T1_left
+  - tarsus4_T1_left
+  - tarsus5_T1_left
   - coxa_abduct_T1_right
   - coxa_twist_T1_right
   - coxa_T1_right
@@ -126,10 +109,10 @@ joint_names:
   - femur_T1_right
   - tibia_T1_right
   - tarsus_T1_right
-  # - tarsus2_T1_right
-  # - tarsus3_T1_right
-  # - tarsus4_T1_right
-  # - tarsus5_T1_right
+  - tarsus2_T1_right
+  - tarsus3_T1_right
+  - tarsus4_T1_right
+  - tarsus5_T1_right
 
   # T2 leg joints (with femur_twist in v1)
   - coxa_abduct_T2_left
@@ -139,10 +122,10 @@ joint_names:
   - femur_T2_left
   - tibia_T2_left
   - tarsus_T2_left
-  # - tarsus2_T2_left
-  # - tarsus3_T2_left
-  # - tarsus4_T2_left
-  # - tarsus5_T2_left
+  - tarsus2_T2_left
+  - tarsus3_T2_left
+  - tarsus4_T2_left
+  - tarsus5_T2_left
   - coxa_abduct_T2_right
   - coxa_twist_T2_right
   - coxa_T2_right
@@ -150,10 +133,10 @@ joint_names:
   - femur_T2_right
   - tibia_T2_right
   - tarsus_T2_right
-  # - tarsus2_T2_right
-  # - tarsus3_T2_right
-  # - tarsus4_T2_right
-  # - tarsus5_T2_right
+  - tarsus2_T2_right
+  - tarsus3_T2_right
+  - tarsus4_T2_right
+  - tarsus5_T2_right
 
   # T3 leg joints (with femur_twist in v1)
   - coxa_abduct_T3_left
@@ -163,10 +146,10 @@ joint_names:
   - femur_T3_left
   - tibia_T3_left
   - tarsus_T3_left
-  # - tarsus2_T3_left
-  # - tarsus3_T3_left
-  # - tarsus4_T3_left
-  # - tarsus5_T3_left
+  - tarsus2_T3_left
+  - tarsus3_T3_left
+  - tarsus4_T3_left
+  - tarsus5_T3_left
   - coxa_abduct_T3_right
   - coxa_twist_T3_right
   - coxa_T3_right
@@ -174,10 +157,10 @@ joint_names:
   - femur_T3_right
   - tibia_T3_right
   - tarsus_T3_right
-  # - tarsus2_T3_right
-  # - tarsus3_T3_right
-  # - tarsus4_T3_right
-  # - tarsus5_T3_right
+  - tarsus2_T3_right
+  - tarsus3_T3_right
+  - tarsus4_T3_right
+  - tarsus5_T3_right
 
 wing_names:
   # Same as v2
@@ -370,14 +353,14 @@ model:
 
   INDIVIDUAL_PART_OPTIMIZATION:
     # Use actual MJCF joint names (not body names) — matched via substring against _part_names.
-    # All 3 coxa DOFs (flexion/twist/extension) and femur_twist are included so each leg's
+    # All 3 coxa DOFs (abduct/twist/extension) and femur_twist are included so each leg's
     # full joint chain is refined in the per-leg pass, not just in the global (all-joints) step.
-    "T1L": ["coxa_flexion_T1_left", "coxa_twist_T1_left", "coxa_T1_left", "femur_twist_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "tarsus4_T1_left", "tarsus5_T1_left"]
-    "T1R": ["coxa_flexion_T1_right", "coxa_twist_T1_right", "coxa_T1_right", "femur_twist_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "tarsus4_T1_right", "tarsus5_T1_right"]
-    "T2L": ["coxa_flexion_T2_left", "coxa_twist_T2_left", "coxa_T2_left", "femur_twist_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "tarsus4_T2_left", "tarsus5_T2_left"]
-    "T2R": ["coxa_flexion_T2_right", "coxa_twist_T2_right", "coxa_T2_right", "femur_twist_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "tarsus4_T2_right", "tarsus5_T2_right"]
-    "T3L": ["coxa_flexion_T3_left", "coxa_twist_T3_left", "coxa_T3_left", "femur_twist_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "tarsus4_T3_left", "tarsus5_T3_left"]
-    "T3R": ["coxa_flexion_T3_right", "coxa_twist_T3_right", "coxa_T3_right", "femur_twist_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "tarsus4_T3_right", "tarsus5_T3_right"]
+    "T1L": ["coxa_abduct_T1_left", "coxa_twist_T1_left", "coxa_T1_left", "femur_twist_T1_left", "femur_T1_left", "tibia_T1_left", "tarsus_T1_left", "tarsus2_T1_left", "tarsus3_T1_left", "tarsus4_T1_left", "tarsus5_T1_left"]
+    "T1R": ["coxa_abduct_T1_right", "coxa_twist_T1_right", "coxa_T1_right", "femur_twist_T1_right", "femur_T1_right", "tibia_T1_right", "tarsus_T1_right", "tarsus2_T1_right", "tarsus3_T1_right", "tarsus4_T1_right", "tarsus5_T1_right"]
+    "T2L": ["coxa_abduct_T2_left", "coxa_twist_T2_left", "coxa_T2_left", "femur_twist_T2_left", "femur_T2_left", "tibia_T2_left", "tarsus_T2_left", "tarsus2_T2_left", "tarsus3_T2_left", "tarsus4_T2_left", "tarsus5_T2_left"]
+    "T2R": ["coxa_abduct_T2_right", "coxa_twist_T2_right", "coxa_T2_right", "femur_twist_T2_right", "femur_T2_right", "tibia_T2_right", "tarsus_T2_right", "tarsus2_T2_right", "tarsus3_T2_right", "tarsus4_T2_right", "tarsus5_T2_right"]
+    "T3L": ["coxa_abduct_T3_left", "coxa_twist_T3_left", "coxa_T3_left", "femur_twist_T3_left", "femur_T3_left", "tibia_T3_left", "tarsus_T3_left", "tarsus2_T3_left", "tarsus3_T3_left", "tarsus4_T3_left", "tarsus5_T3_left"]
+    "T3R": ["coxa_abduct_T3_right", "coxa_twist_T3_right", "coxa_T3_right", "femur_twist_T3_right", "femur_T3_right", "tibia_T3_right", "tarsus_T3_right", "tarsus2_T3_right", "tarsus3_T3_right", "tarsus4_T3_right", "tarsus5_T3_right"]
 
   # Color to use for each keypoint when visualizing the results
   KEYPOINT_COLOR_PAIRS:
@@ -476,27 +459,6 @@ model:
   # Keys are joint names from the MJCF; values are L2 regularization coefficients.
   # Unspecified joints default to 0.0 (no regularization).
   JOINT_REG_WEIGHTS: {}
-    # Coxa extension (axis X)
-    # coxa_T1_left:  0.0001
-    # coxa_T1_right: 0.0001
-    # coxa_T2_left:  0.0001
-    # coxa_T2_right: 0.0001
-    # coxa_T3_left:  0.0001
-    # coxa_T3_right: 0.0001
-    # Coxa flexion/abduction (axis Z)
-    # coxa_flexion_T1_left:  0.001
-    # coxa_flexion_T1_right: 0.001
-    # coxa_flexion_T2_left:  0.001
-    # coxa_flexion_T2_right: 0.001
-    # coxa_flexion_T3_left:  0.001
-    # coxa_flexion_T3_right: 0.001
-    # # Coxa twist/yaw (axis Y)
-    # coxa_twist_T1_left:  0.001
-    # coxa_twist_T1_right: 0.001
-    # coxa_twist_T2_left:  0.001
-    # coxa_twist_T2_right: 0.001
-    # coxa_twist_T3_left:  0.001
-    # coxa_twist_T3_right: 0.001
 
   # Fixed step size for the ProjectedGradient q optimizer.
   # stepsize > 0 disables Armijo/FISTA line search (a nested while_loop that does
