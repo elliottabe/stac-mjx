@@ -16,8 +16,8 @@ preprocessing:
 # STAC pipeline config (merged from stac/stac_fly_free.yaml and stac_ik)
 stac:
   # Input/output paths
-  data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
-  save_path: "${paths.data_dir}"
+  data_path: "${paths.data_dir}/preprocessing/${dataset.preprocessing.input_filename}"
+  save_path: "${paths.save_dir}"
   xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
 
   # STAC IK parameters
@@ -26,7 +26,7 @@ stac:
   n_fit_frames: 601
   n_frames_per_clip: 601
   num_clips: 0  # Computed dynamically
-  skip_fit_offsets: False
+  skip_fit_offsets: True
   skip_ik_only: False
   infer_qvels: True
 

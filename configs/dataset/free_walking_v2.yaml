@@ -14,8 +14,8 @@ preprocessing:
 # STAC pipeline config (merged from stac/stac_fly_free_v2.yaml and stac_ik)
 stac:
   # Input/output paths
-  data_path: "${paths.data_dir}/${dataset.preprocessing.input_filename}"
-  save_path: "${paths.data_dir}"
+  data_path: "${paths.data_dir}/preprocessing/${dataset.preprocessing.input_filename}"
+  save_path: "${paths.save_dir}"
   xml_dir: "${paths.body_model_dir}/${anatomy.name}/"
 
   # STAC IK parameters for V2 model

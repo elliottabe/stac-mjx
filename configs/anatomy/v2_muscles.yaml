@@ -303,19 +303,19 @@ model:
     T1L_TaT1: 0. 0. 0.
     T1L_TaT3: 0. 0. 0.
     T1L_TaTip: 0 0.005 0
-    T1R_ThxCx: 0 -0.02 0
+    T1R_ThxCx: 0 0.02 0
     T1R_Tro: 0. 0. 0.
     T1R_FeTi: 0. 0. 0.
     T1R_TiTa: 0. 0. 0.
     T1R_TaT1: 0. 0. 0.
-    T1R_TaT3: 0. 0. 0.
-    T1R_TaTip: 0 -0.005 0
+    T1R_TaT3: 0 0.005 0
+    T1R_TaTip: 0. 0. 0.
     T2L_Tro: 0. 0. 0.
     T2L_FeTi: 0. 0. 0.
     T2L_TiTa: 0. 0. 0.
     T2L_TaT1: 0. 0. 0.
-    T2L_TaT3: 0. 0. 0.
-    T2L_TaTip: 0 0.005 0
+    T2L_TaT3: 0 0.005 0
+    T2L_TaTip: 0. 0. 0.
     T2R_Tro: 0. 0. 0.
     T2R_FeTi: 0. 0. 0.
     T2R_TiTa: 0. 0. 0.
@@ -333,7 +333,7 @@ model:
     T3R_TiTa: 0. 0. 0.
     T3R_TaT1: 0. 0. 0.
     T3R_TaT3: 0. 0. 0.
-    T3R_TaTip: 0 0.005 0
+    T3R_TaTip: 0 -0.005 0
 
   ROOT_OPTIMIZATION_KEYPOINT: "Scutellum"
 

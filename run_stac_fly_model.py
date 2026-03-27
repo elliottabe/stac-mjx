@@ -85,7 +85,7 @@ def parse_hydra_config(cfg: DictConfig):
         kp_data = kp_data * model_cfg['MOCAP_SCALE_FACTOR']
         print(f"Loaded single bout: {kp_data.shape[0]} frames, {len(sorted_kp_names)} keypoints")
         
-    elif 'bout_001' in bout_dict or 'bout_0' in bout_dict:
+    elif any(k.startswith('bout_') for k in bout_dict.keys()):
         # Multi-bout format - concatenate all bouts
         # Filter out non-bout keys (like 'info')
         bout_keys = [k for k in bout_dict.keys() if k.startswith('bout_')]

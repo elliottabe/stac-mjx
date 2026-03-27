@@ -1,17 +1,19 @@
 # @package _global_.dataset
 
-name: courtship
-env_name: courtship
+name: BDN2_headless
+env_name: BDN2_headless
 
-# Dataset version
+# Dataset version - typically a timestamp or identifier
+# This gets interpolated into paths for organizing different data versions
 version: Data_analysis
 
 # Preprocessing settings
+# These determine which preprocessed file to load for STAC IK
 preprocessing:
-  input_filename: preprocessed_bout_${anatomy.name}_${dataset.name}.h5
-  bouts_csv: null
+  input_filename: preprocessed_bout_${anatomy.name}_${dataset.name}.h5 # Output from preprocess_keypoints_for_ik.py
+  bouts_csv: null  # Optional: if you want to process specific bouts
 
-# STAC pipeline config (merged from stac/stac_fly_courtship.yaml and stac_ik)
+# STAC pipeline config (merged from stac/stac_fly_free.yaml and stac_ik)
 stac:
   # Input/output paths
   data_path: "${paths.data_dir}/preprocessing/${dataset.preprocessing.input_filename}"
@@ -21,10 +23,10 @@ stac:
   # STAC IK parameters
   continuous: False
   enable_padding: True
-  n_fit_frames: 500
-  n_frames_per_clip: 500
+  n_fit_frames: 601
+  n_frames_per_clip: 601
   num_clips: 0  # Computed dynamically
-  skip_fit_offsets: True
+  skip_fit_offsets: False
   skip_ik_only: False
   infer_qvels: True
 

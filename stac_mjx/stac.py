@@ -128,14 +128,6 @@ class Stac:
             3,
         )
 
-        # Build per-qpos joint regularization weights toward rest pose (q=0).
-        # Uses _part_names which maps each qpos index to its joint name.
-        # Falls back to 0.0 (no regularization) if JOINT_REG_WEIGHTS not in config.
-        q_reg_cfg = self.cfg.model.get("JOINT_REG_WEIGHTS", {})
-        self._q_reg_weights = jp.array(
-            [float(q_reg_cfg.get(name, 0.0)) for name in self._part_names]
-        )
-
         self._mj_model.opt.solver = {
             "cg": mujoco.mjtSolver.mjSOL_CG,
             "newton": mujoco.mjtSolver.mjSOL_NEWTON,
@@ -155,14 +147,7 @@ class Stac:
 
         # Create Stac_Core object
         self.stac_core_obj = stac_core.StacCore(
-            self.cfg.model.FTOL,
-            self.cfg.model.N_ITER_Q,
-            self.cfg.model.N_ITER_M,
-            self.cfg.model.get("STEPSIZE_Q", 0.0),
-            use_jaxls=self.cfg.model.get("USE_JAXLS", False),
-            jaxls_lambda_initial=self.cfg.model.get("JAXLS_LAMBDA_INITIAL", 1.0),
-            smooth_weight=self.cfg.model.get("JAXLS_SMOOTH_WEIGHT", 0.0),
-            jaxls_linear_solver=self.cfg.model.get("JAXLS_LINEAR_SOLVER", "dense_cholesky"),
+            self.cfg.model.FTOL, self.cfg.model.N_ITER_Q, self.cfg.model.N_ITER_M
         )
 
     def part_opt_setup(self):
@@ -301,7 +286,6 @@ class Stac:
                     self._body_site_idxs,
                     self._indiv_parts,
                     self._kp_weights,
-                    self._q_reg_weights,
                 )
             )
 
@@ -337,7 +321,6 @@ class Stac:
                 self._body_site_idxs,
                 self._indiv_parts,
                 self._kp_weights,
-                self._q_reg_weights,
             )
         )
 
@@ -368,9 +351,6 @@ class Stac:
                 Keypoint order must match the order in the skeleton file.
             offsets (jp.ndarray): offsets loaded from offset.p after fit()
         """
-        if self.stac_core_obj._use_jaxls:
-            return self._ik_only_jaxls(kp_data, offsets)
-
         # Create batches of kp_data
         batched_kp_data = utils.batch_kp_data(
             kp_data,
@@ -438,7 +418,7 @@ class Stac:
         # q_phase - pose
         vmap_pose_opt = jax.vmap(
             compute_stac.pose_optimization,
-            in_axes=(None, 0, 0, 0, None, None, None, None, None, None),
+            in_axes=(None, 0, 0, 0, None, None, None, None, None),
         )
         mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error = (
             vmap_pose_opt(
@@ -451,7 +431,6 @@ class Stac:
                 self._body_site_idxs,
                 self._indiv_parts,
                 self._kp_weights,
-                self._q_reg_weights,
             )
         )
 
@@ -468,103 +447,6 @@ class Stac:
             np.array(marker_sites),
             np.array(batched_kp_data),
             batched=True,
-        )
-
-    def _ik_only_jaxls(self, kp_data, offsets):
-        """ik_only implementation using the jaxls batch solver.
-
-        Processes all frames in one jaxls LeastSquaresProblem (or in per-clip
-        chunks when n_frames_per_clip is set). No vmap over clips — jaxls
-        handles T-frame batching internally.
-
-        Args:
-            kp_data (jp.ndarray): Keypoint data, shape (n_frames, n_kp*3).
-            offsets (jp.ndarray): Marker offsets from fit_offsets().
-
-        Returns:
-            StacData: Same format as fit_offsets() / ik_only().
-        """
-        import time
-
-        mjx_model, mjx_data = utils.mjx_load(self._mj_model)
-        mjx_model = utils.set_site_pos(mjx_model, offsets, self._body_site_idxs)
-        mjx_data = mjx.kinematics(mjx_model, mjx_data)
-        mjx_data = mjx.com_pos(mjx_model, mjx_data)
-
-        n_frames_per_clip = self.cfg.stac.get("n_frames_per_clip", None)
-        if n_frames_per_clip is None or n_frames_per_clip <= 0:
-            # Solve entire sequence at once
-            clips = [kp_data]
-        else:
-            # Split into chunks
-            total = kp_data.shape[0]
-            clips = [
-                kp_data[i : i + n_frames_per_clip]
-                for i in range(0, total, n_frames_per_clip)
-            ]
-
-        all_qposes, all_xposes, all_xquats, all_marker_sites, all_errors = [], [], [], [], []
-
-        for clip_idx, clip_kp in enumerate(clips):
-            print(f"ik_only (jaxls): clip {clip_idx + 1}/{len(clips)}, T={clip_kp.shape[0]}")
-            s = time.time()
-
-            # Root optimization (per-frame, fast)
-            if self._root_kp_idx != -1 and not self._fixed:
-                mjx_data = compute_stac.root_optimization(
-                    self.stac_core_obj,
-                    mjx_model,
-                    mjx_data,
-                    clip_kp,
-                    self._root_kp_idx,
-                    self._lb,
-                    self._ub,
-                    self._body_site_idxs,
-                    self._trunk_kps,
-                )
-
-            # Batch pose optimization via jaxls
-            (
-                mjx_data, qposes, xposes, xquats, marker_sites, _, frame_error
-            ) = compute_stac.pose_optimization(
-                self.stac_core_obj,
-                mjx_model,
-                mjx_data,
-                clip_kp,
-                self._lb,
-                self._ub,
-                self._body_site_idxs,
-                self._indiv_parts,
-                self._kp_weights,
-                self._q_reg_weights,
-            )
-
-            all_qposes.append(np.array(qposes))
-            all_xposes.append(np.array(xposes))
-            all_xquats.append(np.array(xquats))
-            all_marker_sites.append(np.array(marker_sites))
-            all_errors.append(np.array(frame_error))
-            print(f"  Clip done in {(time.time() - s) / 60:.2f} min")
-
-        qposes = np.concatenate(all_qposes, axis=0)
-        xposes = np.concatenate(all_xposes, axis=0)
-        xquats = np.concatenate(all_xquats, axis=0)
-        marker_sites = np.concatenate(all_marker_sites, axis=0)
-        frame_error = np.concatenate(all_errors, axis=0)
-
-        flattened_errors, mean, std = self._get_error_stats(frame_error)
-        print(f"Mean: {mean}")
-        print(f"Standard deviation: {std}")
-
-        kp_flat = np.array(kp_data).reshape(-1, kp_data.shape[-1])
-        self._offsets = offsets  # needed by _package_data (non-batched path)
-        return self._package_data(
-            mjx_model,
-            qposes,
-            xposes,
-            xquats,
-            marker_sites,
-            kp_flat,
         )
 
     def _package_data(

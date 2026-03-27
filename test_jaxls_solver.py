@@ -32,7 +32,7 @@ from stac_mjx import utils
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-MODEL_PATH = "/Users/eabe/Research/MyRepos/fruitfly_body_models/fruitfly_v1/fruitfly_v1_free.xml"
+MODEL_PATH = "/home/eabe/Research/MyRepos/fruitfly_body_models/fruitfly_v1/fruitfly_v1_free.xml"
 N_FAKE_KPS = 20   # use a subset of sites as fake keypoints
 N_ITER = 20       # LM iterations for the test
 T_BATCH = 50      # frames for batch trajectory test
