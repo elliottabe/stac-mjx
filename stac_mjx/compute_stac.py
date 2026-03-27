@@ -272,6 +272,12 @@ def pose_optimization(
         )
         return mjx_data, outputs
 
+    if stac_core_obj._use_jaxls:
+        return _pose_optimization_jaxls(
+            stac_core_obj, mjx_model, mjx_data, kp_data,
+            lb, ub, site_idxs, indiv_parts, kps_to_opt, _q_reg, s,
+        )
+
     mjx_data, (qposes, xposes, xquats, marker_sites, frame_error) = jax.lax.scan(
         scan_fn, mjx_data, frames
     )
@@ -287,3 +293,88 @@ def pose_optimization(
         frame_time,
         frame_error,
     )
+
+
+def _pose_optimization_jaxls(
+    stac_core_obj: stac_core.StacCore,
+    mjx_model,
+    mjx_data,
+    kp_data: jp.ndarray,
+    lb: jp.ndarray,
+    ub: jp.ndarray,
+    site_idxs: jp.ndarray,
+    kps_to_opt: jp.ndarray,
+    q_reg_weights: jp.ndarray,
+    s: float,
+) -> Tuple:
+    """Batch trajectory pose optimization using jaxls Levenberg-Marquardt.
+
+    Solves all T frames simultaneously in one jaxls LeastSquaresProblem.
+    Adjacent frames are coupled via a smoothness cost when smooth_weight > 0.
+
+    Individual per-limb optimization passes are dropped — the LM Hessian
+    (J^T J) naturally couples all joints, making separate limb passes
+    unnecessary.
+
+    Args:
+        stac_core_obj: StacCore with _use_jaxls=True.
+        mjx_model: MJX Model.
+        mjx_data: MJX Data (used as initial state / FK template).
+        kp_data: Keypoint observations (T, n_kp*3) or (T, n_kp, 3).
+        lb, ub: Joint bounds (nq,).
+        site_idxs: Marker site indices.
+        kps_to_opt: Per-keypoint weight mask (n_kp*3,).
+        q_reg_weights: Per-joint regularization weights (nq,).
+        s: Wall-clock start time for logging.
+
+    Returns:
+        Same tuple as pose_optimization(): (mjx_data, qposes, xposes, xquats,
+        marker_sites, frame_time, frame_error)
+    """
+    T = kp_data.shape[0]
+    qs_to_opt = jp.ones(mjx_model.nq, dtype=bool)
+
+    # Warm-start: tile current qpos across all frames
+    q_init = jp.tile(mjx_data.qpos, (T, 1))
+
+    # Flatten kp_data to (T, n_kp*3) if needed
+    kp_flat = kp_data.reshape(T, -1) if kp_data.ndim == 3 else kp_data
+
+    # Solve all T frames at once (jaxls handles vmapping internally)
+    qposes = stac_core_obj._jaxls_solver.solve_trajectory(
+        q_init=q_init,
+        mjx_model=mjx_model,
+        mjx_data_template=mjx_data,
+        kp_data=kp_flat,
+        qs_to_opt=qs_to_opt,
+        kps_to_opt=kps_to_opt,
+        lb=lb,
+        ub=ub,
+        site_idxs=site_idxs,
+        q_reg_weights=q_reg_weights,
+    )  # (T, nq)
+
+    # Compute xpos / xquat / marker_sites for all frames via vmap
+    def fk_frame(q):
+        data = mjx_data.replace(qpos=q)
+        data = utils.kinematics(mjx_model, data)
+        data = utils.com_pos(mjx_model, data)
+        return data.xpos, data.xquat, utils.get_site_xpos(data, site_idxs)
+
+    xposes, xquats, marker_sites = jax.vmap(fk_frame)(qposes)
+
+    # Update mjx_data to last frame for consistency with callers
+    mjx_data = utils.replace_qs(mjx_model, mjx_data, qposes[-1])
+
+    # frame_error: compute per-frame marker residual norms
+    def frame_err(q, kp):
+        data = mjx_data.replace(qpos=q)
+        data = utils.kinematics(mjx_model, data)
+        data = utils.com_pos(mjx_model, data)
+        markers = utils.get_site_xpos(data, site_idxs).flatten()
+        return jp.sum(jp.square((kp - markers) * kps_to_opt))
+
+    frame_error = jax.vmap(frame_err)(qposes, kp_flat)
+
+    print(f"Pose Optimization (jaxls batch) finished in {(time.time() - s) / 60.0:.2f} minutes")
+    return mjx_data, qposes, xposes, xquats, marker_sites, [], frame_error

@@ -5,13 +5,28 @@ import jax.numpy as jp
 from jax import jit
 
 from functools import partial
-from jaxopt import ProjectedGradient
-from jaxopt.projection import projection_box
-from jaxopt import OptaxSolver
 
-import optax
+try:
+    from jaxopt import ProjectedGradient
+    from jaxopt.projection import projection_box
+    from jaxopt import OptaxSolver
+    _JAXOPT_AVAILABLE = True
+except ImportError:
+    _JAXOPT_AVAILABLE = False
+
+try:
+    import optax
+    _OPTAX_AVAILABLE = True
+except ImportError:
+    _OPTAX_AVAILABLE = False
 
 from stac_mjx import utils
+
+try:
+    from stac_mjx.stac_core_jaxls import JaxlsBatchSolver
+    _JAXLS_AVAILABLE = True
+except ImportError:
+    _JAXLS_AVAILABLE = False
 
 
 def q_loss(
@@ -149,6 +164,54 @@ def squared_error(x):
     return jp.sum(jp.square(x))
 
 
+def _q_opt_jaxls(
+    jaxls_solver,
+    mjx_model,
+    mjx_data,
+    marker_ref_arr: jp.ndarray,
+    qs_to_opt: jp.ndarray,
+    kps_to_opt: jp.ndarray,
+    q0: jp.ndarray,
+    lb,
+    ub,
+    site_idxs,
+    q_reg_weights: jp.ndarray,
+):
+    """Update q_pose using the jaxls Levenberg-Marquardt solver.
+
+    Returns (mjx_data, result) where result is a simple namespace with
+    a .params attribute holding the optimized q — matching the interface
+    expected by compute_stac.py callers.
+    """
+    import types
+
+    q_opt = jaxls_solver.run_frame(
+        q0,
+        mjx_model,
+        mjx_data,
+        marker_ref_arr,
+        qs_to_opt,
+        kps_to_opt,
+        lb,
+        ub,
+        site_idxs,
+        q_reg_weights,
+    )
+
+    # Return a lightweight result object compatible with the existing caller pattern:
+    #   res.params  -> optimized q
+    #   res.state.error -> not computed, set to 0.0
+    result = types.SimpleNamespace(
+        params=q_opt,
+        state=types.SimpleNamespace(error=0.0),
+    )
+
+    mjx_data = mjx_data.replace(qpos=utils.make_qs(q0, qs_to_opt, q_opt))
+    mjx_data = utils.kinematics(mjx_model, mjx_data)
+
+    return mjx_data, result
+
+
 @partial(jit, static_argnames=["q_solver"])
 def _q_opt(
     q_solver,
@@ -241,7 +304,9 @@ class StacCore:
         tol (float): Tolerance for the q_solver.
     """
 
-    def __init__(self, tol=1e-5, n_iter_q=400, n_iter_m=2000, stepsize_q=0.0):
+    def __init__(self, tol=1e-5, n_iter_q=400, n_iter_m=2000, stepsize_q=0.0,
+                 use_jaxls=False, jaxls_lambda_initial=1.0, smooth_weight=0.0,
+                 jaxls_linear_solver="dense_cholesky"):
         """Initialze StacCore with 'q_solver' and 'm_solver'.
 
         Args:
@@ -252,15 +317,50 @@ class StacCore:
                 FISTA backtracking line search (a nested while_loop that runs up to 30
                 extra kinematics evaluations per gradient step — very slow inside
                 jax.lax.scan). Set to 0.0 to restore line search. Default: 0.0.
+            use_jaxls (bool): If True and jaxls is available, use the batch
+                Levenberg-Marquardt solver from jaxls instead of ProjectedGradient.
+                All frames are solved simultaneously in one LM problem. Default: False.
+            jaxls_lambda_initial (float): Initial LM damping factor. Default: 1.0.
+            smooth_weight (float): Weight for ||q[t]-q[t-1]||² smoothness cost.
+                0.0 disables smoothness (pure per-frame tracking). Start with 0.01–0.1.
+                Only used when use_jaxls=True.
+            jaxls_linear_solver (str): Linear solver for LM normal equations.
+                "dense_cholesky" is fastest for short clips (T*nq < ~5000).
+                "conjugate_gradient" for longer clips. Default: "dense_cholesky".
         """
-        self.opt = optax.sgd(learning_rate=5e-4, momentum=0.9, nesterov=False)
+        self.opt = optax.sgd(learning_rate=5e-4, momentum=0.9, nesterov=False) if _OPTAX_AVAILABLE else None
+        self._smooth_weight = smooth_weight
 
-        # TODO: make maxiter a config parameter
-        self.q_solver = ProjectedGradient(
-            fun=q_loss, projection=projection_box, maxiter=n_iter_q, tol=tol,
-            stepsize=stepsize_q,
-        )
-        self.m_solver = OptaxSolver(opt=self.opt, fun=m_loss, maxiter=n_iter_m)
+        self._use_jaxls = use_jaxls and _JAXLS_AVAILABLE
+        if use_jaxls and not _JAXLS_AVAILABLE:
+            print("Warning: use_jaxls=True but jaxls is not installed. Falling back to ProjectedGradient.")
+
+        if self._use_jaxls:
+            self._jaxls_solver = JaxlsBatchSolver(
+                n_iter=n_iter_q,
+                linear_solver=jaxls_linear_solver,
+                lambda_initial=jaxls_lambda_initial,
+                smooth_weight=smooth_weight,
+            )
+            self.q_solver = None
+        else:
+            if not _JAXOPT_AVAILABLE:
+                raise ImportError(
+                    "jaxopt is required for the default ProjectedGradient solver. "
+                    "Install it with: pip install jaxopt\n"
+                    "Or use the jaxls solver: StacCore(..., use_jaxls=True)"
+                )
+            self.q_solver = ProjectedGradient(
+                fun=q_loss, projection=projection_box, maxiter=n_iter_q, tol=tol,
+                stepsize=stepsize_q,
+            )
+        if not _JAXOPT_AVAILABLE:
+            # m_solver (offset optimization) always uses OptaxSolver from jaxopt
+            # If jaxopt is unavailable we still create it so offset_optimization
+            # can be called; it will fail at runtime if jaxopt is truly absent.
+            self.m_solver = None
+        else:
+            self.m_solver = OptaxSolver(opt=self.opt, fun=m_loss, maxiter=n_iter_m)
 
     def q_opt(
         self,
@@ -277,9 +377,23 @@ class StacCore:
     ):
         """Updates q_pose using estimated marker parameters.
 
-        This function is a wrapper for `_q_opt()` and updates `q_pose`
-        based on estimated marker parameters.
+        Dispatches to jaxls Levenberg-Marquardt solver when use_jaxls=True,
+        otherwise falls back to the original ProjectedGradient solver.
         """
+        if self._use_jaxls:
+            return _q_opt_jaxls(
+                self._jaxls_solver,
+                mjx_model,
+                mjx_data,
+                marker_ref_arr,
+                qs_to_opt,
+                kps_to_opt,
+                q0,
+                lb,
+                ub,
+                site_idxs,
+                q_reg_weights,
+            )
         return _q_opt(
             self.q_solver,
             mjx_model,
