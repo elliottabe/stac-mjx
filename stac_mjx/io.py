@@ -46,6 +46,13 @@ class ModelConfig:
     RENDER_FPS: int  # FPS for rendering
     N_SAMPLE_FRAMES: int  # Number of frames to sample when computing offset residual
     M_REG_COEF: int  # Coefficient for regularization term in offset optimization
+    STEPSIZE_Q: float = 0.0  # Fixed step size for q optimizer (0 = line search)
+    USE_JAXLS: bool = False  # Use jaxls batch LM solver instead of ProjectedGradient
+    JAXLS_LAMBDA_INITIAL: float = 1.0  # LM damping factor
+    JAXLS_SMOOTH_WEIGHT: float = 0.0  # Temporal smoothness weight
+    JAXLS_LINEAR_SOLVER: str = "dense_cholesky"  # Linear solver for jaxls
+    JAXLS_CHUNK_SIZE: int = 100  # Max frames per jaxls solve (0 = no chunking)
+    JAXLS_ORIENTATION_KEYPOINTS: Dict[str, str] = field(default_factory=dict)  # rear/left/right/front keypoints for warm-start orientation
 
 
 @dataclass

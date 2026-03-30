@@ -306,7 +306,8 @@ class StacCore:
 
     def __init__(self, tol=1e-5, n_iter_q=400, n_iter_m=2000, stepsize_q=0.0,
                  use_jaxls=False, jaxls_lambda_initial=1.0, smooth_weight=0.0,
-                 jaxls_linear_solver="dense_cholesky"):
+                 jaxls_linear_solver="auto", jaxls_chunk_size=100,
+                 use_se3_root=True):
         """Initialze StacCore with 'q_solver' and 'm_solver'.
 
         Args:
@@ -326,12 +327,13 @@ class StacCore:
                 Only used when use_jaxls=True.
             jaxls_linear_solver (str): Linear solver for LM normal equations.
                 "dense_cholesky" is fastest for short clips (T*nq < ~5000).
-                "conjugate_gradient" for longer clips. Default: "dense_cholesky".
+                "conjugate_gradient" for longer clips. Default: "auto".
         """
         self.opt = optax.sgd(learning_rate=5e-4, momentum=0.9, nesterov=False) if _OPTAX_AVAILABLE else None
         self._smooth_weight = smooth_weight
 
         self._use_jaxls = use_jaxls and _JAXLS_AVAILABLE
+        self._jaxls_chunk_size = jaxls_chunk_size
         if use_jaxls and not _JAXLS_AVAILABLE:
             print("Warning: use_jaxls=True but jaxls is not installed. Falling back to ProjectedGradient.")
 
@@ -341,6 +343,7 @@ class StacCore:
                 linear_solver=jaxls_linear_solver,
                 lambda_initial=jaxls_lambda_initial,
                 smooth_weight=smooth_weight,
+                use_se3_root=use_se3_root,
             )
             self.q_solver = None
         else:

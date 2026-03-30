@@ -467,6 +467,21 @@ model:
   # Set to 0.0 to restore line search (accurate but slow). Tune if quality degrades.
   STEPSIZE_Q: 0.0
 
+  # --- Jaxls batch Levenberg-Marquardt IK solver ---
+  # Set USE_JAXLS=True to solve all frames simultaneously via jaxls LM
+  # instead of per-frame ProjectedGradient.
+  USE_JAXLS: True
+  JAXLS_LAMBDA_INITIAL: 1.0
+  JAXLS_SMOOTH_WEIGHT: 0.2
+  JAXLS_LINEAR_SOLVER: "auto"
+  JAXLS_USE_SE3_ROOT: true
+  JAXLS_CHUNK_SIZE: 0  # JAXLS_CHUNK_SIZE > 0 solves in chunks of frames to reduce memory usage at the cost of speed.
+  JAXLS_ORIENTATION_KEYPOINTS:
+    rear: Scutellum
+    left: WingL_base
+    right: WingR_base
+    front: Antenna_Base
+
   # Per-keypoint weights for the IK loss. Higher weights on proximal leg
   # keypoints counteract the leverage bias where distal keypoints dominate
   # due to larger positional errors for the same angular error.

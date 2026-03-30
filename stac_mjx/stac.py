@@ -147,8 +147,32 @@ class Stac:
 
         # Create Stac_Core object
         self.stac_core_obj = stac_core.StacCore(
-            self.cfg.model.FTOL, self.cfg.model.N_ITER_Q, self.cfg.model.N_ITER_M
+            self.cfg.model.FTOL, self.cfg.model.N_ITER_Q, self.cfg.model.N_ITER_M,
+            stepsize_q=getattr(self.cfg.model, "STEPSIZE_Q", 0.0),
+            use_jaxls=getattr(self.cfg.model, "USE_JAXLS", False),
+            jaxls_lambda_initial=getattr(self.cfg.model, "JAXLS_LAMBDA_INITIAL", 1.0),
+            smooth_weight=getattr(self.cfg.model, "JAXLS_SMOOTH_WEIGHT", 0.0),
+            jaxls_linear_solver=getattr(self.cfg.model, "JAXLS_LINEAR_SOLVER", "auto"),
+            jaxls_chunk_size=getattr(self.cfg.model, "JAXLS_CHUNK_SIZE", 100),
+            use_se3_root=getattr(self.cfg.model, "JAXLS_USE_SE3_ROOT", True),
         )
+        # Expose root keypoint index on stac_core_obj for jaxls warm-starting
+        self.stac_core_obj._root_kp_idx = self._root_kp_idx
+
+        # Parse orientation keypoints for per-frame quaternion warm-start
+        orient_cfg = self.cfg.model.get("JAXLS_ORIENTATION_KEYPOINTS", {})
+        if orient_cfg and len(orient_cfg) >= 3:
+            try:
+                rear_idx = self._kp_names.index(orient_cfg["rear"])
+                left_idx = self._kp_names.index(orient_cfg["left"])
+                right_idx = self._kp_names.index(orient_cfg["right"])
+                front_idx = self._kp_names.index(orient_cfg["front"]) if "front" in orient_cfg else -1
+                self.stac_core_obj._orientation_kp_indices = (rear_idx, left_idx, right_idx, front_idx)
+            except (ValueError, KeyError) as exc:
+                print(f"Warning: JAXLS_ORIENTATION_KEYPOINTS: {exc} — orientation warm-start disabled")
+                self.stac_core_obj._orientation_kp_indices = None
+        else:
+            self.stac_core_obj._orientation_kp_indices = None
 
     def part_opt_setup(self):
         """Set up the lists of indices for part optimization."""
@@ -416,23 +440,51 @@ class Stac:
             )
 
         # q_phase - pose
-        vmap_pose_opt = jax.vmap(
-            compute_stac.pose_optimization,
-            in_axes=(None, 0, 0, 0, None, None, None, None, None),
-        )
-        mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error = (
-            vmap_pose_opt(
-                self.stac_core_obj,
-                mjx_model,
-                mjx_data,
-                batched_kp_data,
-                self._lb,
-                self._ub,
-                self._body_site_idxs,
-                self._indiv_parts,
-                self._kp_weights,
+        if self.stac_core_obj._use_jaxls:
+            # jaxls uses Python-loop chunking internally, so process clips
+            # sequentially instead of vmapping (which would multiply memory).
+            n_clips = batched_kp_data.shape[0]
+            results = []
+            for i in range(n_clips):
+                print(f"Clip {i+1}/{n_clips}")
+                result = compute_stac.pose_optimization(
+                    self.stac_core_obj,
+                    jax.tree.map(lambda x: x[i], mjx_model),
+                    jax.tree.map(lambda x: x[i], mjx_data),
+                    batched_kp_data[i],
+                    self._lb,
+                    self._ub,
+                    self._body_site_idxs,
+                    self._indiv_parts,
+                    self._kp_weights,
+                )
+                results.append(result)
+            # Stack results: each is (mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error)
+            mjx_data = jax.tree.map(lambda *xs: jp.stack(xs), *(r[0] for r in results))
+            qposes = jp.stack([r[1] for r in results])
+            xposes = jp.stack([r[2] for r in results])
+            xquats = jp.stack([r[3] for r in results])
+            marker_sites = jp.stack([r[4] for r in results])
+            frame_time = []
+            frame_error = jp.stack([r[6] for r in results])
+        else:
+            vmap_pose_opt = jax.vmap(
+                compute_stac.pose_optimization,
+                in_axes=(None, 0, 0, 0, None, None, None, None, None),
             )
-        )
+            mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error = (
+                vmap_pose_opt(
+                    self.stac_core_obj,
+                    mjx_model,
+                    mjx_data,
+                    batched_kp_data,
+                    self._lb,
+                    self._ub,
+                    self._body_site_idxs,
+                    self._indiv_parts,
+                    self._kp_weights,
+                )
+            )
 
         flattened_errors, mean, std = self._get_error_stats(frame_error)
         # Print the results
