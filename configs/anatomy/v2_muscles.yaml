@@ -72,9 +72,9 @@ body_names:
 
 joint_names:
   # Head and antenna joints (commented out, but preserved for reference)
-  # - head_abduct
-  # - head_twist
-  # - head
+  - head_abduct
+  - head_twist
+  - head
   # - antenna_abduct_left
   # - antenna_twist_left
   # - antenna_left
@@ -296,26 +296,26 @@ model:
     WingR_V13: -0.02 0.26 0.02
     Abd_A4: 0 0.015 0.025
     Abd_tip: 0 0.035 0
-    T1L_ThxCx: 0 0.02 0
+    T1L_ThxCx: 0.00126 0.01863 -0.00716
     T1L_Tro: 0. 0. 0.
     T1L_FeTi: 0. 0. 0.
     T1L_TiTa: 0. 0. 0.
     T1L_TaT1: 0. 0. 0.
     T1L_TaT3: 0. 0. 0.
     T1L_TaTip: 0 0.005 0
-    T1R_ThxCx: 0 0.02 0
+    T1R_ThxCx: -0.00082 -0.01897 0.00627
     T1R_Tro: 0. 0. 0.
     T1R_FeTi: 0. 0. 0.
     T1R_TiTa: 0. 0. 0.
     T1R_TaT1: 0. 0. 0.
-    T1R_TaT3: 0 0.005 0
-    T1R_TaTip: 0. 0. 0.
+    T1R_TaT3: 0. 0. 0.
+    T1R_TaTip: 0 -0.005 0
     T2L_Tro: 0. 0. 0.
     T2L_FeTi: 0. 0. 0.
     T2L_TiTa: 0. 0. 0.
     T2L_TaT1: 0. 0. 0.
-    T2L_TaT3: 0 0.005 0
-    T2L_TaTip: 0. 0. 0.
+    T2L_TaT3: 0. 0. 0.
+    T2L_TaTip: 0 0.005 0
     T2R_Tro: 0. 0. 0.
     T2R_FeTi: 0. 0. 0.
     T2R_TiTa: 0. 0. 0.
@@ -414,15 +414,17 @@ model:
   # you can regularize those sites using this with M_REG_COEF.
   SITES_TO_REGULARIZE:
     - Scutellum
-    - Antenna_Base
-    - EyeL
-    - EyeR
+    # - Antenna_Base
+    # - EyeL
+    # - EyeR
     - Abd_A4
     - Abd_tip
-    - WingL_V12
-    - WingL_V13
-    - WingR_V12
-    - WingR_V13
+    - WingL_base
+    - WingR_base
+    # - WingL_V12
+    # - WingL_V13
+    # - WingR_V12
+    # - WingR_V13
     - T1L_ThxCx
     - T1R_ThxCx
     - T1L_TaTip
@@ -463,7 +465,7 @@ model:
   # --- Jaxls batch Levenberg-Marquardt IK solver ---
   USE_JAXLS: True
   JAXLS_LAMBDA_INITIAL: 1.0
-  JAXLS_SMOOTH_WEIGHT: 0.1
+  JAXLS_SMOOTH_WEIGHT: 0.2
   JAXLS_LINEAR_SOLVER: "auto"
   JAXLS_USE_SE3_ROOT: true
   JAXLS_CHUNK_SIZE: 0

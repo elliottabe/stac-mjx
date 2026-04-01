@@ -26,7 +26,7 @@ stac:
   n_fit_frames: 601
   n_frames_per_clip: 601
   num_clips: 0  # Computed dynamically
-  skip_fit_offsets: True
+  skip_fit_offsets: False
   skip_ik_only: False
   infer_qvels: True
 

@@ -513,8 +513,8 @@ class Stac:
             get_batch_offsets = jax.vmap(utils.get_site_pos, in_axes=(0, None))
             offsets = get_batch_offsets(mjx_model, self._body_site_idxs)[0]
             qposes = qposes.reshape(-1, qposes.shape[-1])
-            xposes = xposes.reshape(-1, *xposes.shape[2:], order="F")
-            xquats = xquats.reshape(-1, *xquats.shape[2:], order="F")
+            xposes = xposes.reshape(-1, *xposes.shape[2:])
+            xquats = xquats.reshape(-1, *xquats.shape[2:])
             marker_sites = marker_sites.reshape(-1, *marker_sites.shape[2:])
         else:
             offsets = self._offsets.reshape((-1, 3))
