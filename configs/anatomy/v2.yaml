@@ -463,7 +463,7 @@ model:
   # --- Jaxls batch Levenberg-Marquardt IK solver ---
   USE_JAXLS: True
   JAXLS_LAMBDA_INITIAL: 1.0
-  JAXLS_SMOOTH_WEIGHT: 0.2
+  JAXLS_SMOOTH_WEIGHT: 0.01
   JAXLS_LINEAR_SOLVER: "auto"
   JAXLS_USE_SE3_ROOT: true
   JAXLS_CHUNK_SIZE: 0
