@@ -92,9 +92,22 @@ def parse_hydra_config(cfg: DictConfig):
         bout_keys = [k for k in bout_dict.keys() if k.startswith('bout_')]
         print(f"Detected multi-bout format with {len(bout_keys)} bouts")
         
-        # Get keypoint names from first bout
+        # Get keypoint names: prefer info/top-level (merged files), fall back per-bout.
         first_key = bout_keys[0]
-        sorted_kp_names = bout_dict[first_key]['kp_names']
+        sorted_kp_names = None
+        info_dict = bout_dict.get('info', {}) if isinstance(bout_dict.get('info', {}), dict) else {}
+        if 'kp_names' in info_dict and len(info_dict['kp_names']) > 0:
+            sorted_kp_names = info_dict['kp_names']
+        elif 'kp_names' in bout_dict and not str(first_key).startswith('bout_'):
+            sorted_kp_names = bout_dict['kp_names']
+        elif 'kp_names' in bout_dict[first_key]:
+            sorted_kp_names = bout_dict[first_key]['kp_names']
+        else:
+            raise KeyError(
+                "Could not locate 'kp_names' in multi-bout file: checked "
+                "bout_dict['info']['kp_names'], bout_dict['kp_names'], and "
+                f"bout_dict['{first_key}']['kp_names']."
+            )
         
         # Collect all clips
         clips = []
