@@ -1,8 +1,8 @@
 # copied from https://codereview.stackexchange.com/a/121308 (and slightly modified for updated h5py, Elliott Abe)
+import os
 import numpy as np
 import h5py
 import jax.numpy as jnp
-#import os
 
 def save(filename, dic, compression='gzip', compression_opts=5, chunked_datasets=None):
     """
@@ -10,6 +10,11 @@ def save(filename, dic, compression='gzip', compression_opts=5, chunked_datasets
     dictionaries or lists or (in the case of tree-leaves) numpy arrays
     or basic scalar types (int/float/str/bytes) in a recursive
     manner to an hdf5 file, with an intact hierarchy.
+
+    Writes are atomic: data is first written to a sibling ``<filename>.tmp``
+    file and then renamed into place with ``os.replace``. If the process is
+    interrupted (e.g. SLURM preemption) the partial ``.tmp`` file is removed,
+    and the original target path is never left in a truncated state.
 
     Parameters:
     -----------
@@ -26,10 +31,29 @@ def save(filename, dic, compression='gzip', compression_opts=5, chunked_datasets
         Format: {'dataset_name': chunk_shape, ...}
         Example: {'qpos': (1, None, None)} means chunk by first dimension only
     """
-    with h5py.File(filename, 'w') as h5file:
-        recursively_save_dict_contents_to_group(h5file, '/', dic, compression,
-                                               compression_opts=compression_opts,
-                                               chunked_datasets=chunked_datasets or {})
+    filename = os.fspath(filename)
+    tmp_filename = filename + ".tmp"
+    parent = os.path.dirname(filename)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    if os.path.exists(tmp_filename):
+        try:
+            os.remove(tmp_filename)
+        except OSError:
+            pass
+    try:
+        with h5py.File(tmp_filename, 'w') as h5file:
+            recursively_save_dict_contents_to_group(h5file, '/', dic, compression,
+                                                   compression_opts=compression_opts,
+                                                   chunked_datasets=chunked_datasets or {})
+        os.replace(tmp_filename, filename)
+    except BaseException:
+        if os.path.exists(tmp_filename):
+            try:
+                os.remove(tmp_filename)
+            except OSError:
+                pass
+        raise
 
 def recursively_save_dict_contents_to_group(h5file, path, dic, compression='gzip', compression_opts=5, chunked_datasets=None):
     """
@@ -64,7 +88,7 @@ def recursively_save_dict_contents_to_group(h5file, path, dic, compression='gzip
     for key, item in iterator: #dic.items():
         if isinstance(dic,(list, tuple)):
             key = str(key)
-        if isinstance(item, (jnp.ndarray, np.ndarray, np.int64, np.float64, int, float, str, bytes)):
+        if isinstance(item, (jnp.ndarray, np.ndarray, np.generic, bool, int, float, str, bytes)):
             # Use create_dataset with compression for arrays and numeric data
             if isinstance(item, (jnp.ndarray, np.ndarray)) and item.size > 1:
                 # Check if this dataset should use chunking
