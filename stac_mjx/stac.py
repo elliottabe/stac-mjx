@@ -443,10 +443,13 @@ class Stac:
         if self.stac_core_obj._use_jaxls:
             # jaxls uses Python-loop chunking internally, so process clips
             # sequentially instead of vmapping (which would multiply memory).
+            import time as _time
             n_clips = batched_kp_data.shape[0]
             results = []
+            _t0_all = _time.time()
             for i in range(n_clips):
-                print(f"Clip {i+1}/{n_clips}")
+                _t0 = _time.time()
+                print(f"Clip {i+1}/{n_clips}", end="", flush=True)
                 result = compute_stac.pose_optimization(
                     self.stac_core_obj,
                     jax.tree.map(lambda x: x[i], mjx_model),
@@ -459,6 +462,9 @@ class Stac:
                     self._kp_weights,
                 )
                 results.append(result)
+                _elapsed = _time.time() - _t0
+                _total = _time.time() - _t0_all
+                print(f" ({_elapsed:.1f}s, total {_total:.1f}s)", flush=True)
             # Stack results: each is (mjx_data, qposes, xposes, xquats, marker_sites, frame_time, frame_error)
             mjx_data = jax.tree.map(lambda *xs: jp.stack(xs), *(r[0] for r in results))
             qposes = jp.stack([r[1] for r in results])
