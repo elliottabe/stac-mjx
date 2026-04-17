@@ -244,12 +244,21 @@ class Stac:
         )
 
     def _get_error_stats(self, errors: list):
-        """Compute error stats."""
-        flattened_errors = np.array(errors).reshape(-1)
+        """Compute error stats, ignoring NaN frames.
 
-        # Calculate mean and standard deviation
-        mean = np.mean(flattened_errors)
-        std = np.std(flattened_errors)
+        NaN frames arise when the input keypoint data contains NaN
+        (e.g. kp-wise masking from the preprocessing filters). We report
+        nanmean/nanstd so one bad frame does not poison the summary, plus
+        the NaN-frame count for visibility.
+        """
+        flattened_errors = np.array(errors).reshape(-1)
+        n_total = flattened_errors.size
+        n_nan = int(np.isnan(flattened_errors).sum())
+        if n_nan:
+            print(f"  [stac] {n_nan}/{n_total} frames had NaN error "
+                  f"(ignored in mean/std)")
+        mean = np.nanmean(flattened_errors) if n_nan < n_total else np.nan
+        std = np.nanstd(flattened_errors) if n_nan < n_total else np.nan
 
         return flattened_errors, mean, std
 
