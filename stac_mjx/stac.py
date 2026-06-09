@@ -221,6 +221,19 @@ class Stac:
             )
 
         rescale.dm_scale_spec(spec, self.cfg.model.SCALE_FACTOR)
+
+        # Subject-specific per-segment calibration: morph the model's segments to
+        # this fly's proportions (legs/head/abdomen) before compiling, so IK is
+        # solved on a model that physically matches the animal. Scales come from
+        # preprocessing (h5 info -> cfg.model.SEGMENT_SCALES). No-op if absent.
+        seg_scales = self.cfg.model.get("SEGMENT_SCALES", None)
+        if seg_scales:
+            entries = seg_scales.values() if hasattr(seg_scales, "values") else seg_scales
+            seg_list = [{"geom_body": e["geom_body"], "length_body": e["length_body"],
+                         "scale": float(e["scale"])} for e in entries]
+            rescale.rescale_per_segment(spec, seg_list)  # in place on self._spec
+            print(f"[calibration] morphed {len(seg_list)} body segments to subject proportions")
+
         model = self._spec.compile()
 
         site_index_map = {
@@ -458,7 +471,7 @@ class Stac:
             _t0_all = _time.time()
             for i in range(n_clips):
                 _t0 = _time.time()
-                print(f"Clip {i+1}/{n_clips}", end="", flush=True)
+                print(f"Clip {i+1}/{n_clips} \n", end="", flush=True)
                 result = compute_stac.pose_optimization(
                     self.stac_core_obj,
                     jax.tree.map(lambda x: x[i], mjx_model),

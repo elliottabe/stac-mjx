@@ -24,6 +24,7 @@ from omegaconf import DictConfig, OmegaConf
 
 import stac_mjx
 import stac_mjx.io_dict_to_hdf5 as ioh5
+from stac_mjx.keypoint_prune import prune_model_to_available
 from stac_mjx.path_utils import convert_dict_to_path, register_custom_resolvers
 register_custom_resolvers()
 
@@ -147,6 +148,12 @@ def parse_hydra_config(cfg: DictConfig):
     print(f"Keypoints: {sorted_kp_names[:5]}...")
     print(f"Frames per clip: {cfg.stac.n_frames_per_clip}")
     print()
+
+    # Auto-detect missing keypoints (e.g. amputated leg): prune the model config
+    # down to the keypoints actually present and reorder data columns to match.
+    # No-op for full datasets where every model keypoint is present.
+    kp_data, sorted_kp_names = prune_model_to_available(cfg, sorted_kp_names, kp_data)
+    model_cfg = cfg.model
 
     # Run STAC IK solver
     print("="* 80)
