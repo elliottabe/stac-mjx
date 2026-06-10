@@ -82,14 +82,14 @@ def _recolour_tree(body, rgba: list[float]) -> None:
         _recolour_tree(child, rgba)
 
 
-def rescale_per_segment(spec: MjSpec, segments: list, scale_meshes: bool = False) -> MjSpec:
+def rescale_per_segment(spec: MjSpec, segments: list, scale_meshes: bool = True) -> MjSpec:
     """Morph individual body segments (subject-specific calibration).
 
     Unlike ``dm_scale_spec`` (one global scalar), this scales each named segment
     independently so the model matches an individual animal's proportions. For
     each segment it scales:
-      - the ``geom_body``'s geoms (size / pos / fromto) -> the visual/collision
-        segment lengthens, and
+      - the ``geom_body``'s geoms (BOTH visual meshes and collision primitives) ->
+        the segment's visual + collision geometry lengthens together, and
       - the ``length_body``'s ``pos`` -> the distal joint moves out, lengthening
         the kinematic segment.
     Scaling ``pos`` of a body translates its whole subtree without stretching the
@@ -104,20 +104,27 @@ def rescale_per_segment(spec: MjSpec, segments: list, scale_meshes: bool = False
         segments: list of dicts with keys ``geom_body``, ``length_body``,
             ``scale`` (e.g. from utils.segment_calibration.estimate_segment_scales).
             ``self_segment`` entries simply have geom_body == length_body.
+        scale_meshes: scale the visual mesh geoms too (default True). Set False to
+            leave the base-size meshes (kinematics + collision still scale).
 
     Returns:
         MjSpec: the morphed spec (mutated in place; pass ``spec.copy()`` to isolate).
 
     Note: this model uses MESH geoms for the visual body and PRIMITIVE geoms for
     collision. MuJoCo ignores ``size`` on mesh geoms (they use the mesh asset's
-    own ``scale``) and the mesh geom ``pos`` is a placement offset — scaling
-    either of those displaces/does-not-resize the mesh. So for a mesh geom we
-    scale its (unique) mesh ASSET; for primitive geoms we scale size/pos/fromto.
+    own ``scale``), and the mesh geom ``pos`` is a placement offset. Scaling the
+    asset alone grows the mesh about its OWN local origin, detaching it from the
+    joint; scaling the geom ``pos`` by the same factor too grows the mesh about the
+    BODY ORIGIN (the proximal joint), so the segment lengthens in place and stays
+    connected to the moved-out distal joint. Primitive (collision) geoms scale
+    size/pos/fromto, which likewise grows them about the body origin.
     """
     scaled = spec
     mesh_by_name = {m.name: m for m in scaled.meshes}
 
     def _body(name):
+        if not name:
+            return None
         try:
             return scaled.body(name)
         except (KeyError, ValueError):
@@ -131,15 +138,17 @@ def rescale_per_segment(spec: MjSpec, segments: list, scale_meshes: bool = False
         if gb is not None:
             for geom in gb.geoms:
                 if int(geom.type) == _MESH_GEOM:
-                    # Visual mesh. Scaling its asset isotropically grows it about
-                    # the mesh's local origin (not the proximal joint), which
-                    # fragments articulated leg meshes — so it's opt-in. The
-                    # kinematic morph (length_body.pos) alone gives correct IK;
-                    # meshes left at base size just under-fill long segments.
+                    # Visual mesh: scale the mesh ASSET *and* the geom placement
+                    # ``pos`` by s. Scaling both grows the mesh about the body
+                    # origin (the proximal joint) instead of the mesh's own local
+                    # origin, so the segment lengthens in place and stays connected
+                    # to the moved-out distal joint (no fragmentation).
                     if scale_meshes:
                         mname = getattr(geom, 'meshname', '') or ''
                         if mname in mesh_by_name:
                             _scale_vec(mesh_by_name[mname].scale, s)
+                        if getattr(geom, 'pos', None) is not None:
+                            _scale_vec(geom.pos, s)
                 else:
                     # Collision primitive (capsule/ellipsoid/...): scale geometry.
                     if hasattr(geom, 'size'):
@@ -149,9 +158,19 @@ def rescale_per_segment(spec: MjSpec, segments: list, scale_meshes: bool = False
                     if hasattr(geom, 'fromto'):
                         _scale_vec(geom.fromto, s)
         # Kinematics: move the distal joint out so the segment length matches.
-        lb = _body(seg['length_body'])
+        # ``length_body`` is empty for wing-style segments (the hinge must not move).
+        lb = _body(seg.get('length_body'))
         if lb is not None and getattr(lb, 'pos', None) is not None:
             _scale_vec(lb.pos, s)
+        # Wing-style: the tip is a tracking-site offset on the body (not a child
+        # body), so scale every site on this body about the body origin (hinge).
+        # This lengthens the hinge->tip distance the IK sites must reach, while the
+        # hinge (body pos) stays fixed.
+        sbody = _body(seg.get('scale_sites_on_body'))
+        if sbody is not None:
+            for site in sbody.sites:
+                if getattr(site, 'pos', None) is not None:
+                    _scale_vec(site.pos, s)
     return scaled
 
 

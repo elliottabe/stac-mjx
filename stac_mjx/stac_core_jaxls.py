@@ -221,7 +221,14 @@ class JaxlsBatchSolver:
             data = utils.kinematics(mjx_model, data)
             data = utils.com_pos(mjx_model, data)
             markers = utils.get_site_xpos(data, site_idxs).flatten()
-            return (kp - markers) * kps_to_opt
+            # NaN-safe residual: a masked/occluded keypoint coordinate is NaN.
+            # Sanitize to a finite value BEFORE subtracting (NaN*0 == NaN), then
+            # zero its residual via the finite mask so it neither contributes nor
+            # leaks a gradient. Without this, one NaN frame makes the whole-clip
+            # cost non-finite and LM rejects every step (clip frozen at init).
+            finite = jnp.isfinite(kp)
+            kp_clean = jnp.where(finite, kp, 0.0)
+            return (kp_clean - markers) * kps_to_opt * finite
 
         costs.append(marker_cost(root_all, joint_all, kp_all))
 
@@ -340,7 +347,11 @@ class JaxlsBatchSolver:
             data = utils.kinematics(mjx_model, data)
             data = utils.com_pos(mjx_model, data)
             markers = utils.get_site_xpos(data, site_idxs).flatten()
-            return (kp - markers) * kps_to_opt
+            # NaN-safe residual (see _build_se3.marker_cost): zero out masked/NaN
+            # keypoint coordinates so one NaN frame can't freeze the whole clip.
+            finite = jnp.isfinite(kp)
+            kp_clean = jnp.where(finite, kp, 0.0)
+            return (kp_clean - markers) * kps_to_opt * finite
 
         costs.append(marker_cost(q_all, kp_all))
 

@@ -321,6 +321,10 @@ def pose_optimization(
     frames = jp.arange(kp_data.shape[0])
 
     kps_to_opt = kp_weights if kp_weights is not None else jp.ones(kp_data.shape[1])
+    # Fall back to the weights stored on the StacCore (set from JOINT_REG_WEIGHTS)
+    # when not passed explicitly, so callers don't have to thread them through.
+    if q_reg_weights is None:
+        q_reg_weights = getattr(stac_core_obj, "_q_reg_weights", None)
     _q_reg = q_reg_weights if q_reg_weights is not None else jp.zeros(mjx_model.nq)
     qs_to_opt = jp.ones(mjx_model.nq, dtype=bool)
     print("Pose Optimization:")

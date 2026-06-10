@@ -128,6 +128,19 @@ class Stac:
             3,
         )
 
+        # Per-qpos L2 regularization weights toward rest (q=0), from
+        # JOINT_REG_WEIGHTS (joint name -> coefficient). Maps each named joint to
+        # its qpos index; unspecified joints stay 0 (no regularization). Used by
+        # pose_optimization to e.g. pin the under-constrained wing roll flat.
+        q_reg = np.zeros(self._mj_model.nq)
+        for jname, w in (self.cfg.model.get("JOINT_REG_WEIGHTS", {}) or {}).items():
+            jid = mujoco.mj_name2id(self._mj_model, mujoco.mjtObj.mjOBJ_JOINT, jname)
+            if jid >= 0:
+                q_reg[self._mj_model.jnt_qposadr[jid]] = float(w)
+            else:
+                print(f"Warning: JOINT_REG_WEIGHTS joint '{jname}' not in model")
+        self._q_reg_weights = jp.array(q_reg)
+
         self._mj_model.opt.solver = {
             "cg": mujoco.mjtSolver.mjSOL_CG,
             "newton": mujoco.mjtSolver.mjSOL_NEWTON,
@@ -158,6 +171,9 @@ class Stac:
         )
         # Expose root keypoint index on stac_core_obj for jaxls warm-starting
         self.stac_core_obj._root_kp_idx = self._root_kp_idx
+        # Expose joint regularization weights so pose_optimization picks them up
+        # without threading through every call site.
+        self.stac_core_obj._q_reg_weights = self._q_reg_weights
 
         # Parse orientation keypoints for per-frame quaternion warm-start
         orient_cfg = self.cfg.model.get("JAXLS_ORIENTATION_KEYPOINTS", {})
@@ -230,7 +246,9 @@ class Stac:
         if seg_scales:
             entries = seg_scales.values() if hasattr(seg_scales, "values") else seg_scales
             seg_list = [{"geom_body": e["geom_body"], "length_body": e["length_body"],
-                         "scale": float(e["scale"])} for e in entries]
+                         "scale": float(e["scale"]),
+                         "scale_sites_on_body": e.get("scale_sites_on_body", "")}
+                        for e in entries]
             rescale.rescale_per_segment(spec, seg_list)  # in place on self._spec
             print(f"[calibration] morphed {len(seg_list)} body segments to subject proportions")
 
@@ -676,9 +694,9 @@ class Stac:
             for key, v in self.cfg.model.KEYPOINT_MODEL_PAIRS.items():
                 tendon = self._spec.add_tendon(
                     name=key + "-" + v,
-                    width="0.001",
-                    rgba=[255, 0, 0, 1],  # Red
-                    limited=False,
+                    width=0.001,
+                    rgba=[1, 0, 0, 1],  # Red (mujoco rgba is 0-1)
+                    limited=0,
                 )
                 tendon.wrap_site(key + "_kp")
                 tendon.wrap_site(key + "_new")
