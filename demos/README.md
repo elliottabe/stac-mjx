@@ -10,15 +10,15 @@ The primary entry point for running STAC IK on fruit fly keypoint data.
 
 ```bash
 # Test your configuration first
-python ../test_stac_configs.py paths=workstation dataset=free_walking
+python ../test_stac_configs.py paths=workstation dataset=
 
 # Run STAC on a single version
-python run_stac_fly_model.py paths=workstation dataset=free_walking
+python run_stac_fly_model.py paths=workstation dataset=
 
 # Run STAC across multiple versions (multirun)
 python run_stac_fly_model.py -m \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   version=Predictions_3D_20260114-145343,Predictions_3D_20260202-171900
 ```
 
@@ -29,7 +29,7 @@ python run_stac_fly_model.py -m \
    cd /home/eabe/Research/MyRepos/3d_tracking_dataset
    python scripts/preprocess_keypoints_for_ik.py \
      paths=workstation \
-     dataset=free_walking \
+     dataset= \
      version=Predictions_3D_20260114-145343
    ```
    This creates: `preprocessed_bout.h5` in the version directory
@@ -44,7 +44,7 @@ python run_stac_fly_model.py -m \
 Controlled via Hydra config groups:
 
 - **paths**: Machine-specific paths (`workstation`, `hyak`, `desktop`)
-- **dataset**: Dataset + version (`free_walking`, `courtship`)
+- **dataset**: Dataset + version (``, `courtship`)
 - **anatomy**: Body model version (`v1`, `v2`)
 - **stac**: Pipeline settings (`stac_fly_free`, `stac_fly_free_v2`)
 - **model**: MuJoCo solver params (`fly_free`, `fly_free_v2`)
@@ -65,7 +65,7 @@ Saved to: `{data_dir}/` (same directory as input data)
 # Specify version explicitly
 python run_stac_fly_model.py \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   version=Predictions_3D_20260203-103416
 ```
 
@@ -74,7 +74,7 @@ python run_stac_fly_model.py \
 # Use V2 model
 python run_stac_fly_model.py \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   anatomy=v2 \
   stac=stac_fly_free_v2
 ```
@@ -90,7 +90,7 @@ python run_stac_fly_model.py \
 ```bash
 python run_stac_fly_model.py \
   paths=hyak \
-  dataset=free_walking \
+  dataset= \
   version=Predictions_3D_20260114-145343
 ```
 
@@ -99,19 +99,19 @@ python run_stac_fly_model.py \
 # Multiple versions
 python run_stac_fly_model.py -m \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   version=Predictions_3D_20260114-145343,Predictions_3D_20260202-171900,Predictions_3D_20260203-103416
 
 # Multiple anatomies
 python run_stac_fly_model.py -m \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   anatomy=v1,v2
 
 # Combination
 python run_stac_fly_model.py -m \
   paths=workstation \
-  dataset=free_walking \
+  dataset= \
   version=Predictions_3D_20260114-145343,Predictions_3D_20260203-103416 \
   anatomy=v1,v2
 ```
@@ -133,7 +133,7 @@ python run_stac_fly_model.py -m \
 
 **View resolved configuration:**
 ```bash
-python run_stac_fly_model.py paths=workstation dataset=free_walking --cfg job
+python run_stac_fly_model.py paths=workstation dataset= --cfg job
 ```
 
 ### Development

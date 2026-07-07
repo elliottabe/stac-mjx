@@ -174,7 +174,7 @@ wing_names:
 # Model/registration config (merged from model/fly_free.yaml)
 model:
   MJCF_PATH: ${anatomy.mjcf_path}
-  name: 'fruitfly_V1_free_walking'
+  name: 'fruitfly_V1_'
 
   N_FRAMES_PER_CLIP: 500 # 1000 environments
 

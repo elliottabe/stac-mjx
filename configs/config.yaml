@@ -14,7 +14,7 @@ defaults:
   - _self_
   - anatomy: v1
   - paths: workstation
-  - dataset: free_walking
+  - dataset: free_running
   # - train: imitation
 
 # Interpolation bridges: expose anatomy.model and dataset.stac at top level

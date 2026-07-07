@@ -34,20 +34,20 @@ def parse_hydra_config(cfg: DictConfig):
     Run STAC IK pipeline on preprocessed keypoint data.
     
     Usage examples:
-        # Process free_walking data with default version
-        python run_stac_fly_model.py paths=workstation dataset=free_walking
+        # Process  data with default version
+        python run_stac_fly_model.py paths=workstation dataset=
         
         # Process with specific version
-        python run_stac_fly_model.py paths=workstation dataset=free_walking version=Predictions_3D_20260203-103416
+        python run_stac_fly_model.py paths=workstation dataset= version=Predictions_3D_20260203-103416
         
         # Multirun across versions
-        python run_stac_fly_model.py -m paths=workstation dataset=free_walking version=Predictions_3D_20260114-145343,Predictions_3D_20260202-171900
+        python run_stac_fly_model.py -m paths=workstation dataset= version=Predictions_3D_20260114-145343,Predictions_3D_20260202-171900
         
         # Process courtship data
         python run_stac_fly_model.py paths=workstation dataset=courtship
         
         # Use V2 model
-        python run_stac_fly_model.py paths=workstation dataset=free_walking anatomy=v2 stac=stac_fly_free_v2
+        python run_stac_fly_model.py paths=workstation dataset= anatomy=v2 stac=stac_fly_free_v2
     """
     
     # Print configuration

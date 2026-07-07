@@ -1,7 +1,7 @@
 # @package _global_.dataset
 
-name: free_walking
-env_name: free_walking
+name: free_running
+env_name: free_running
 
 # Dataset version - typically a timestamp or identifier
 # This gets interpolated into paths for organizing different data versions
