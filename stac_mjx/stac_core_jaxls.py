@@ -132,12 +132,28 @@ class JaxlsBatchSolver:
         lambda_initial: float = 1.0,
         smooth_weight: float = 0.0,
         use_se3_root: bool = True,
+        cost_tolerance: float = 1e-5,
+        gradient_tolerance: float = 1e-8,
+        parameter_tolerance: float = 1e-10,
     ):
         self.n_iter = n_iter
         self.linear_solver = linear_solver
         self.lambda_initial = lambda_initial
         self.smooth_weight = smooth_weight
         self.use_se3_root = use_se3_root
+        # jaxls termination tolerances, explicit rather than left on jaxls'
+        # library defaults. cost stays AT jaxls' default (1e-5); gradient and
+        # parameter are TIGHTENED (jaxls: 1e-4 / 1e-6) because weakly
+        # conditioned DOFs (e.g. wing blade-roll, Jacobian column ~14x weaker
+        # than the strong wing DOFs) terminate far short of their optimum on
+        # the loose defaults. See the parent repo's
+        # docs/benchmark/2026-08-13-stac-weak-dof-convergence/notes.md.
+        # NOTE: FTOL is deliberately NOT mapped here — it is 5e-3, 500x looser
+        # than cost_tolerance's 1e-5, and would fire before the gradient
+        # criterion ever engaged. FTOL governs the ProjectedGradient path only.
+        self.cost_tolerance = cost_tolerance
+        self.gradient_tolerance = gradient_tolerance
+        self.parameter_tolerance = parameter_tolerance
         # Cache analyzed problems keyed by (T, nq, n_kp_dim, has_smooth, has_reg, se3)
         self._cache: dict[tuple, _AnalyzedProblem] = {}
 
@@ -535,7 +551,12 @@ class JaxlsBatchSolver:
             verbose=False,
             linear_solver=linear_solver,
             trust_region=jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial),
-            termination=jaxls.TerminationConfig(max_iterations=self.n_iter),
+            termination=jaxls.TerminationConfig(
+                max_iterations=self.n_iter,
+                cost_tolerance=self.cost_tolerance,
+                gradient_tolerance=self.gradient_tolerance,
+                parameter_tolerance=self.parameter_tolerance,
+            ),
             initial_vals=jaxls.VarValues.make([
                 SE3Var(jnp.arange(T)).with_value(roots_init),
                 JointVar(jnp.arange(T)).with_value(hinges_init),
@@ -569,7 +590,12 @@ class JaxlsBatchSolver:
             verbose=False,
             linear_solver=linear_solver,
             trust_region=jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial),
-            termination=jaxls.TerminationConfig(max_iterations=self.n_iter),
+            termination=jaxls.TerminationConfig(
+                max_iterations=self.n_iter,
+                cost_tolerance=self.cost_tolerance,
+                gradient_tolerance=self.gradient_tolerance,
+                parameter_tolerance=self.parameter_tolerance,
+            ),
             initial_vals=jaxls.VarValues.make([
                 QVar(jnp.arange(T)).with_value(q_init),
                 KpVar(jnp.arange(T)).with_value(kp_data),

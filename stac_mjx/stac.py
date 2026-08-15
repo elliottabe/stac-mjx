@@ -168,6 +168,12 @@ class Stac:
             jaxls_linear_solver=getattr(self.cfg.model, "JAXLS_LINEAR_SOLVER", "auto"),
             jaxls_chunk_size=getattr(self.cfg.model, "JAXLS_CHUNK_SIZE", 100),
             use_se3_root=getattr(self.cfg.model, "JAXLS_USE_SE3_ROOT", True),
+            jaxls_cost_tolerance=getattr(
+                self.cfg.model, "JAXLS_COST_TOLERANCE", 1e-5),
+            jaxls_gradient_tolerance=getattr(
+                self.cfg.model, "JAXLS_GRADIENT_TOLERANCE", 1e-8),
+            jaxls_parameter_tolerance=getattr(
+                self.cfg.model, "JAXLS_PARAMETER_TOLERANCE", 1e-10),
         )
         # Expose root keypoint index on stac_core_obj for jaxls warm-starting
         self.stac_core_obj._root_kp_idx = self._root_kp_idx

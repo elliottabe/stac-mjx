@@ -465,6 +465,15 @@ model:
   # --- Jaxls batch Levenberg-Marquardt IK solver ---
   USE_JAXLS: True
   JAXLS_LAMBDA_INITIAL: 1.0
+  # jaxls termination tolerances, made explicit rather than left on jaxls'
+  # own defaults. Gradient and parameter are TIGHTENED (jaxls: 1e-4 / 1e-6) so
+  # weakly conditioned DOFs (wing blade-roll) converge; cost stays AT jaxls'
+  # own default. FTOL is NOT mapped onto cost_tolerance (500x looser; it
+  # governs the ProjectedGradient path only). See the parent repo's
+  # docs/benchmark/2026-08-13-stac-weak-dof-convergence/notes.md.
+  JAXLS_GRADIENT_TOLERANCE: 1.0e-8
+  JAXLS_PARAMETER_TOLERANCE: 1.0e-10
+  JAXLS_COST_TOLERANCE: 1.0e-5
   JAXLS_SMOOTH_WEIGHT: 0.01
   JAXLS_LINEAR_SOLVER: "auto"
   JAXLS_USE_SE3_ROOT: true
