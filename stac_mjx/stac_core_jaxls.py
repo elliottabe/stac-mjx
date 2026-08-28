@@ -100,6 +100,37 @@ class _AnalyzedProblem:
 # Public solver class
 # ---------------------------------------------------------------------------
 
+def _robust_reweight(resid, delta):
+    """IRLS reweighting that turns jaxls' L2 sum into a HUBER loss.
+
+    jaxls minimises sum(residual^2), and a single badly-placed keypoint therefore
+    pulls on the whole pose in proportion to its error SQUARED. Measured on
+    Session0/2025_10_20_13_20_04 bout_00028 fly1, the femur-tibia keypoints sit
+    ~1.5x too far from the trochanter in the data (a keypoint-localisation error,
+    not a real leg), and the resulting bias is 68% of that bout's total fit
+    residual -- it drags the body pose rather than staying local.
+
+    Scaling each residual by sqrt(w) with w = min(1, delta/|r|) makes the
+    effective loss quadratic within `delta` and LINEAR beyond it, so an outlier
+    contributes a bounded pull. `stop_gradient` on the weight is what makes this
+    IRLS rather than a different (and non-convex) objective: LM still sees a
+    plain reweighted least-squares problem, with the weights held fixed within
+    a step and refreshed at the next one.
+
+    Weighting is per KEYPOINT (the 3-vector norm), not per coordinate, so a
+    keypoint is down-weighted as a whole and its error direction is preserved.
+
+    `delta` is in model length units. None/<=0 returns the residual unchanged,
+    so the default behaviour is bit-identical to before this function existed.
+    """
+    if delta is None or delta <= 0:
+        return resid
+    r3 = resid.reshape(-1, 3)
+    n = jnp.linalg.norm(r3, axis=1, keepdims=True)
+    w = jnp.minimum(1.0, delta / jnp.maximum(n, 1e-12))
+    return (r3 * jnp.sqrt(jax.lax.stop_gradient(w))).reshape(-1)
+
+
 class JaxlsBatchSolver:
     """Batch trajectory IK solver using jaxls Levenberg-Marquardt.
 
@@ -135,12 +166,28 @@ class JaxlsBatchSolver:
         cost_tolerance: float = 1e-5,
         gradient_tolerance: float = 1e-8,
         parameter_tolerance: float = 1e-10,
+        robust_delta: float | None = None,
+        smooth_q_mult: jnp.ndarray | None = None,
     ):
         self.n_iter = n_iter
         self.linear_solver = linear_solver
         self.lambda_initial = lambda_initial
         self.smooth_weight = smooth_weight
         self.use_se3_root = use_se3_root
+        # Huber threshold for the marker cost, in model length units.
+        # None (default) = plain squared error, unchanged behaviour.
+        self.robust_delta = robust_delta
+        # Per-DOF multiplier on the temporal smoothness cost, in qpos layout
+        # (length nq). None (default) = uniform 1.0, unchanged behaviour.
+        # Only the hinge block [_FREE_JOINT_NDOF:] is used by the SE3 path;
+        # the 6D root tangent is always smoothed at the base weight.
+        # Motivating case: wing blade-roll is near-unobservable from three
+        # near-collinear wing keypoints, so it wanders on measurement noise.
+        # Smoothing that one DOF harder damps the wander without touching the
+        # wing-direction DOFs that carry the ~193 Hz song.
+        self.smooth_q_mult = (
+            None if smooth_q_mult is None else jnp.asarray(smooth_q_mult, dtype=jnp.float32)
+        )
         # jaxls termination tolerances, explicit rather than left on jaxls'
         # library defaults. cost stays AT jaxls' default (1e-5); gradient and
         # parameter are TIGHTENED (jaxls: 1e-4 / 1e-6) because weakly
@@ -185,6 +232,7 @@ class JaxlsBatchSolver:
         site_idxs: jnp.ndarray,
         q_reg_weights: jnp.ndarray,
         smooth_weight: float,
+        smooth_q_mult: jnp.ndarray | None = None,
     ) -> _AnalyzedProblem:
         """Build the jaxls problem using SE3Var (root) + JointVar (hinges).
 
@@ -214,6 +262,7 @@ class JaxlsBatchSolver:
         kp_all    = KpVar(jnp.arange(T))
 
         costs: list[jaxls.Cost] = []
+        robust_delta = self.robust_delta      # closed over by marker_cost below
 
         # ---- Marker tracking cost ----
         @jaxls.Cost.factory
@@ -244,7 +293,8 @@ class JaxlsBatchSolver:
             # cost non-finite and LM rejects every step (clip frozen at init).
             finite = jnp.isfinite(kp)
             kp_clean = jnp.where(finite, kp, 0.0)
-            return (kp_clean - markers) * kps_to_opt * finite
+            resid = (kp_clean - markers) * kps_to_opt * finite
+            return _robust_reweight(resid, robust_delta)
 
         costs.append(marker_cost(root_all, joint_all, kp_all))
 
@@ -279,6 +329,12 @@ class JaxlsBatchSolver:
 
         # ---- Smoothness: SE3 log-diff + joint diff ----
         if smooth_weight > 0.0 and T > 1:
+            # Per-hinge smoothness multiplier (1.0 everywhere unless a prior
+            # asks for a specific DOF to be damped harder -- see smooth_q_mult).
+            hinge_smooth_mult = (
+                1.0 if smooth_q_mult is None else smooth_q_mult[_FREE_JOINT_NDOF:]
+            )
+
             @jaxls.Cost.factory
             def smoothness_cost(
                 var_values: jaxls.VarValues,
@@ -289,7 +345,7 @@ class JaxlsBatchSolver:
             ) -> jnp.ndarray:
                 # SE3 geodesic difference in tangent space (6D)
                 root_diff  = (var_values[root_prev].inverse() @ var_values[root_curr]).log()
-                joint_diff = var_values[joint_curr] - var_values[joint_prev]
+                joint_diff = (var_values[joint_curr] - var_values[joint_prev]) * hinge_smooth_mult
                 return jnp.concatenate([root_diff, joint_diff]) * smooth_weight
 
             costs.append(smoothness_cost(
@@ -325,6 +381,7 @@ class JaxlsBatchSolver:
         site_idxs: jnp.ndarray,
         q_reg_weights: jnp.ndarray,
         smooth_weight: float,
+        smooth_q_mult: jnp.ndarray | None = None,
     ) -> _AnalyzedProblem:
         """Build and analyze the jaxls problem for a given (T, nq, n_kp_dim) shape.
 
@@ -342,6 +399,7 @@ class JaxlsBatchSolver:
         kp_all = KpVar(jnp.arange(T))
 
         costs: list[jaxls.Cost] = []
+        robust_delta = self.robust_delta      # closed over by marker_cost below
 
         # ---- Marker tracking cost ----
         # jaxls vmaps this over T via the batch dimension of q_all and kp_all.
@@ -367,7 +425,8 @@ class JaxlsBatchSolver:
             # keypoint coordinates so one NaN frame can't freeze the whole clip.
             finite = jnp.isfinite(kp)
             kp_clean = jnp.where(finite, kp, 0.0)
-            return (kp_clean - markers) * kps_to_opt * finite
+            resid = (kp_clean - markers) * kps_to_opt * finite
+            return _robust_reweight(resid, robust_delta)
 
         costs.append(marker_cost(q_all, kp_all))
 
@@ -396,13 +455,15 @@ class JaxlsBatchSolver:
 
         # ---- Smoothness cost: ||q[t] - q[t-1]||² * weight ----
         if smooth_weight > 0.0 and T > 1:
+            q_smooth_mult = 1.0 if smooth_q_mult is None else smooth_q_mult
+
             @jaxls.Cost.factory
             def smoothness_cost(
                 var_values: jaxls.VarValues,
                 q_curr: QVar,
                 q_prev: QVar,
             ) -> jnp.ndarray:
-                return (var_values[q_curr] - var_values[q_prev]) * smooth_weight
+                return (var_values[q_curr] - var_values[q_prev]) * q_smooth_mult * smooth_weight
 
             costs.append(smoothness_cost(
                 QVar(jnp.arange(1, T)),      # q[1..T-1]
@@ -439,7 +500,12 @@ class JaxlsBatchSolver:
         n_kp_dim = int(kp_data.shape[-1]) if kp_data.ndim > 1 else int(kp_data.shape[0])
         has_reg = bool(jnp.any(q_reg_weights > 0))
         has_smooth = self.smooth_weight > 0.0
-        key = (T, nq, n_kp_dim, has_reg, has_smooth, self.use_se3_root)
+        # The multiplier is baked into the cost closure, so it is part of the key.
+        mult_key = (
+            None if self.smooth_q_mult is None
+            else tuple(round(float(v), 6) for v in self.smooth_q_mult)
+        )
+        key = (T, nq, n_kp_dim, has_reg, has_smooth, self.use_se3_root, mult_key)
 
         if key not in self._cache:
             builder = self._build_se3 if self.use_se3_root else self._build
@@ -456,6 +522,7 @@ class JaxlsBatchSolver:
                 site_idxs=site_idxs,
                 q_reg_weights=q_reg_weights,
                 smooth_weight=self.smooth_weight,
+                smooth_q_mult=self.smooth_q_mult,
             )
         return self._cache[key]
 

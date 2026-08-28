@@ -74,6 +74,35 @@ def _align_joint_dims(types, ranges, names):
     return jp.minimum(jp.concatenate(lb), 0.0), jp.concatenate(ub), part_names
 
 
+def _resolve_smooth_q_mult(mj_model, spec):
+    """Map a {joint_name: multiplier} spec to a per-qpos multiplier array.
+
+    Used for the wing blade-roll prior: roll is near-unobservable from three
+    near-collinear wing keypoints, so it wanders on measurement noise. Damping
+    that one DOF's frame-to-frame change leaves the wing-direction DOFs (which
+    carry the ~193 Hz song) at the global smoothness weight.
+
+    Raises on an unknown joint name rather than silently ignoring it -- a typo
+    would make the prior a no-op that still looks like it ran.
+    """
+    if not spec:
+        return None
+    mult = np.ones(int(mj_model.nq), dtype=np.float32)
+    unknown = []
+    for name, m in dict(spec).items():
+        jid = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
+        if jid < 0:
+            unknown.append(str(name))
+            continue
+        mult[int(mj_model.jnt_qposadr[jid])] = float(m)
+    if unknown:
+        raise ValueError(
+            f"JAXLS_SMOOTH_Q_MULT names no such joint(s): {sorted(unknown)}. "
+            "Check the spelling against the body model XML."
+        )
+    return mult
+
+
 class Stac:
     """Main class with key functionality for skeletal registration and rendering."""
 
@@ -164,6 +193,9 @@ class Stac:
             stepsize_q=getattr(self.cfg.model, "STEPSIZE_Q", 0.0),
             use_jaxls=getattr(self.cfg.model, "USE_JAXLS", False),
             jaxls_lambda_initial=getattr(self.cfg.model, "JAXLS_LAMBDA_INITIAL", 1.0),
+            jaxls_robust_delta=getattr(self.cfg.model, "JAXLS_ROBUST_DELTA", None),
+            jaxls_smooth_q_mult=_resolve_smooth_q_mult(
+                self._mj_model, getattr(self.cfg.model, "JAXLS_SMOOTH_Q_MULT", None)),
             smooth_weight=getattr(self.cfg.model, "JAXLS_SMOOTH_WEIGHT", 0.0),
             jaxls_linear_solver=getattr(self.cfg.model, "JAXLS_LINEAR_SOLVER", "auto"),
             jaxls_chunk_size=getattr(self.cfg.model, "JAXLS_CHUNK_SIZE", 100),
