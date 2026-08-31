@@ -74,6 +74,82 @@ def _align_joint_dims(types, ranges, names):
     return jp.minimum(jp.concatenate(lb), 0.0), jp.concatenate(ub), part_names
 
 
+def _resolve_reg_gate(mj_model, spec, sigma_deg=25.0):
+    """Gate the rest prior on how far a DRIVING joint is from its reference.
+
+    `spec` maps {gated_joint: driver_joint}, e.g. wing_roll_left ->
+    wing_yaw_left. The gate is exp(-0.5*(driver - driver_rest)^2 / sigma^2):
+    full strength while the driver sits at rest (wing folded, where pulling the
+    blade to rest is correct) and vanishing as it departs (wing extended, where
+    roll/pitch legitimately leave rest).
+
+    Without this the prior taxes the wrong fly. Measured at weight 1e-3: the
+    folded fly (bout_00001 fly0) pays -0.21% wing residual while the SINGING
+    male (bout_00003 fly1) pays +10.3%, because his extended wing is being
+    pulled toward a folded-wing reference. The singer's wings are the ones
+    carrying the courtship song, so that is the opposite of the trade we want.
+
+    Indices are returned in HINGE space (qpos index - _FREE_JOINT_NDOF), which
+    is what the SE3-root solver's JointVar uses.
+    """
+    if not spec:
+        return None
+    free_ndof = 7  # qpos entries of the free root joint
+    n_hinges = int(mj_model.nq) - free_ndof
+
+    def hinge_idx(name):
+        jid = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
+        if jid < 0:
+            raise ValueError(f"JAXLS_REG_GATE names no such joint: {name!r}")
+        return int(mj_model.jnt_qposadr[jid]) - free_ndof
+
+    drivers, driver_ref, gate_of = [], [], np.full(n_hinges, -1, dtype=np.int32)
+    for gated, driver in dict(spec).items():
+        di = hinge_idx(driver)
+        if di not in drivers:
+            drivers.append(di)
+            driver_ref.append(float(mj_model.qpos_spring[di + free_ndof]))
+        gate_of[hinge_idx(gated)] = drivers.index(di)
+    return dict(driver_hinge_idx=np.asarray(drivers, np.int32),
+                driver_ref=np.asarray(driver_ref, np.float32),
+                gate_of=gate_of,
+                sigma=float(np.radians(sigma_deg)))
+
+
+def _resolve_rest_prior(mj_model, spec):
+    """Build (q_reg_weights, q_ref) for a pull toward the model's REST pose.
+
+    `spec` is {joint_name: weight}. The reference is `mj_model.qpos_spring`,
+    the model's own spring rest -- NOT zero. This matters: measured on
+    bout_00001 fly0, the folded wing has yaw within 0.2 deg of its rest value
+    while roll sits 15.8 deg and pitch 41.6 deg off rest, and those two
+    deviations are what drive the blade through the abdomen (r=0.80 / 0.75
+    against penetration depth, which reaches 0.046 -- 33x the 0.0013 grazing
+    contact the model shows at its own rest pose). Three near-collinear wing
+    keypoints fix where the wing POINTS but barely constrain rotation about
+    that axis, so the blade orientation is free to drift into the body.
+
+    Raises on an unknown joint name: a typo must not silently disable the prior.
+    """
+    if not spec:
+        return None, None
+    nq = int(mj_model.nq)
+    w = np.zeros(nq, dtype=np.float32)
+    unknown = []
+    for name, val in dict(spec).items():
+        jid = mujoco.mj_name2id(mj_model, mujoco.mjtObj.mjOBJ_JOINT, str(name))
+        if jid < 0:
+            unknown.append(str(name))
+            continue
+        w[int(mj_model.jnt_qposadr[jid])] = float(val)
+    if unknown:
+        raise ValueError(
+            f"JAXLS_Q_REG_TO_REST names no such joint(s): {sorted(unknown)}. "
+            "Check the spelling against the body model XML."
+        )
+    return w, np.asarray(mj_model.qpos_spring, dtype=np.float32).copy()
+
+
 def _resolve_smooth_q_mult(mj_model, spec):
     """Map a {joint_name: multiplier} spec to a per-qpos multiplier array.
 
@@ -196,6 +272,11 @@ class Stac:
             jaxls_robust_delta=getattr(self.cfg.model, "JAXLS_ROBUST_DELTA", None),
             jaxls_smooth_q_mult=_resolve_smooth_q_mult(
                 self._mj_model, getattr(self.cfg.model, "JAXLS_SMOOTH_Q_MULT", None)),
+            **dict(zip(("q_reg_weights", "jaxls_q_ref"), _resolve_rest_prior(
+                self._mj_model, getattr(self.cfg.model, "JAXLS_Q_REG_TO_REST", None)))),
+            jaxls_reg_gate=_resolve_reg_gate(
+                self._mj_model, getattr(self.cfg.model, "JAXLS_REG_GATE", None),
+                float(getattr(self.cfg.model, "JAXLS_REG_GATE_SIGMA_DEG", 25.0))),
             smooth_weight=getattr(self.cfg.model, "JAXLS_SMOOTH_WEIGHT", 0.0),
             jaxls_linear_solver=getattr(self.cfg.model, "JAXLS_LINEAR_SOLVER", "auto"),
             jaxls_chunk_size=getattr(self.cfg.model, "JAXLS_CHUNK_SIZE", 100),

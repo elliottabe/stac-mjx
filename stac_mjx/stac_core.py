@@ -310,6 +310,9 @@ class StacCore:
                  use_se3_root=True,
                  jaxls_robust_delta=None,
                  jaxls_smooth_q_mult=None,
+                 jaxls_q_ref=None,
+                 jaxls_reg_gate=None,
+                 q_reg_weights=None,
                  jaxls_cost_tolerance=1e-5,
                  jaxls_gradient_tolerance=1e-8,
                  jaxls_parameter_tolerance=1e-10):
@@ -344,6 +347,18 @@ class StacCore:
                 blade-roll) be damped harder than the rest without raising
                 smooth_weight globally, which would blunt the fast wing
                 motion carrying the ~193 Hz song.
+            jaxls_q_ref (array|None): Reference pose for the joint
+                regularizer, in qpos layout. None (default) = regularize
+                toward q=0. For wing DOFs this must be the model's springref:
+                the folded-wing rest pose sits at wing_yaw=+85.94 deg and
+                wing_pitch=-57.30 deg, so a pull toward 0 would unfold the
+                wings rather than settle them onto the abdomen.
+            q_reg_weights (array|None): Per-qpos L2 regularization weight
+                toward `jaxls_q_ref`. None (default) = no regularization.
+            jaxls_reg_gate (dict|None): Optional gate switching that
+                regularization off as a driving joint leaves its reference --
+                see stac._resolve_reg_gate. Used to apply the wing-blade
+                rest prior only while the wing is FOLDED.
             jaxls_cost_tolerance (float): jaxls termination on relative cost
                 change. Left at jaxls' own default 1e-5 — `tol`/FTOL is NOT
                 mapped here (it is 5e-3, 500x looser, and would fire before
@@ -355,6 +370,7 @@ class StacCore:
             jaxls_parameter_tolerance (float): jaxls termination on the update
                 2-norm. Tightened from jaxls' 1e-6 default. Default: 1e-10.
         """
+        self._q_reg_weights = q_reg_weights
         self.opt = optax.sgd(learning_rate=5e-4, momentum=0.9, nesterov=False) if _OPTAX_AVAILABLE else None
         self._smooth_weight = smooth_weight
 
@@ -375,6 +391,8 @@ class StacCore:
                 parameter_tolerance=jaxls_parameter_tolerance,
                 robust_delta=jaxls_robust_delta,
                 smooth_q_mult=jaxls_smooth_q_mult,
+                q_ref=jaxls_q_ref,
+                reg_gate=jaxls_reg_gate,
             )
             self.q_solver = None
         else:

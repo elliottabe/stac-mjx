@@ -168,6 +168,8 @@ class JaxlsBatchSolver:
         parameter_tolerance: float = 1e-10,
         robust_delta: float | None = None,
         smooth_q_mult: jnp.ndarray | None = None,
+        q_ref: jnp.ndarray | None = None,
+        reg_gate: dict | None = None,
     ):
         self.n_iter = n_iter
         self.linear_solver = linear_solver
@@ -188,6 +190,19 @@ class JaxlsBatchSolver:
         self.smooth_q_mult = (
             None if smooth_q_mult is None else jnp.asarray(smooth_q_mult, dtype=jnp.float32)
         )
+        # Reference pose for the joint regularizer, in qpos layout (length nq).
+        # None (default) = regularize toward q=0, unchanged behaviour.
+        # For the wing blade this MUST be the model's springref, not zero: the
+        # folded-wing rest pose has wing_yaw at +85.94 deg and wing_pitch at
+        # -57.30 deg, and pulling those toward 0 would unfold every wing.
+        self.q_ref = None if q_ref is None else jnp.asarray(q_ref, dtype=jnp.float32)
+        # Optional gate that switches the joint regularizer OFF as a driving DOF
+        # leaves its reference. Built for the wing: pulling blade roll/pitch to
+        # the FOLDED rest pose is right while the wing is folded and wrong while
+        # it is extended, and an ungated prior costs the singing male ~10% wing
+        # residual (measured, bout_00003 fly1) to fix a folded-wing defect.
+        # The gate is stop_gradient'd, so it acts as a per-iteration constant.
+        self.reg_gate = reg_gate
         # jaxls termination tolerances, explicit rather than left on jaxls'
         # library defaults. cost stays AT jaxls' default (1e-5); gradient and
         # parameter are TIGHTENED (jaxls: 1e-4 / 1e-6) because weakly
@@ -233,6 +248,8 @@ class JaxlsBatchSolver:
         q_reg_weights: jnp.ndarray,
         smooth_weight: float,
         smooth_q_mult: jnp.ndarray | None = None,
+        q_ref: jnp.ndarray | None = None,
+        reg_gate: dict | None = None,
     ) -> _AnalyzedProblem:
         """Build the jaxls problem using SE3Var (root) + JointVar (hinges).
 
@@ -302,6 +319,16 @@ class JaxlsBatchSolver:
         if jnp.any(q_reg_weights[_FREE_JOINT_NDOF:] > 0):
             hinge_regs = q_reg_weights[_FREE_JOINT_NDOF:]
             hinge_opt  = qs_to_opt[_FREE_JOINT_NDOF:]
+            hinge_ref  = (jnp.zeros_like(hinge_regs) if q_ref is None
+                          else q_ref[_FREE_JOINT_NDOF:])
+            if reg_gate is None:
+                gate_src = gate_ref = gate_of = None
+                gate_sigma = 0.0
+            else:
+                gate_src   = jnp.asarray(reg_gate["driver_hinge_idx"], jnp.int32)
+                gate_ref   = jnp.asarray(reg_gate["driver_ref"], jnp.float32)
+                gate_of    = jnp.asarray(reg_gate["gate_of"], jnp.int32)
+                gate_sigma = float(reg_gate["sigma"])
 
             @jaxls.Cost.factory
             def reg_cost(
@@ -309,7 +336,17 @@ class JaxlsBatchSolver:
                 joint_var: JointVar,
             ) -> jnp.ndarray:
                 j = var_values[joint_var]
-                return jnp.sqrt(hinge_regs * hinge_opt) * j
+                w = hinge_regs
+                if gate_of is not None:
+                    # Gaussian in the driver DOF's deviation from its reference:
+                    # 1.0 at the reference (wing folded), falling to 0 as it
+                    # departs (wing extended). stop_gradient keeps this a
+                    # weight, not a term the solver can game by moving the driver.
+                    dev = jax.lax.stop_gradient(j[gate_src] - gate_ref)
+                    g = jnp.exp(-0.5 * (dev / gate_sigma) ** 2)
+                    g_full = jnp.where(gate_of >= 0, g[jnp.clip(gate_of, 0)], 1.0)
+                    w = w * g_full
+                return jnp.sqrt(w * hinge_opt) * (j - hinge_ref)
 
             costs.append(reg_cost(joint_all))
 
@@ -382,6 +419,8 @@ class JaxlsBatchSolver:
         q_reg_weights: jnp.ndarray,
         smooth_weight: float,
         smooth_q_mult: jnp.ndarray | None = None,
+        q_ref: jnp.ndarray | None = None,
+        reg_gate: dict | None = None,
     ) -> _AnalyzedProblem:
         """Build and analyze the jaxls problem for a given (T, nq, n_kp_dim) shape.
 
@@ -432,13 +471,15 @@ class JaxlsBatchSolver:
 
         # ---- Joint regularization cost ----
         if jnp.any(q_reg_weights > 0):
+            q_ref_full = jnp.zeros_like(q_reg_weights) if q_ref is None else q_ref
+
             @jaxls.Cost.factory
             def reg_cost(
                 var_values: jaxls.VarValues,
                 q_var: QVar,
             ) -> jnp.ndarray:
                 q = var_values[q_var]
-                return jnp.sqrt(q_reg_weights * qs_to_opt) * q
+                return jnp.sqrt(q_reg_weights * qs_to_opt) * (q - q_ref_full)
 
             costs.append(reg_cost(q_all))
 
@@ -505,7 +546,18 @@ class JaxlsBatchSolver:
             None if self.smooth_q_mult is None
             else tuple(round(float(v), 6) for v in self.smooth_q_mult)
         )
-        key = (T, nq, n_kp_dim, has_reg, has_smooth, self.use_se3_root, mult_key)
+        ref_key = (None if self.q_ref is None
+                   else tuple(round(float(v), 6) for v in self.q_ref))
+        def _hashable(v):
+            try:
+                return tuple(round(float(x), 6) for x in v)
+            except TypeError:
+                return round(float(v), 6)
+
+        gate_key = (None if self.reg_gate is None
+                    else tuple(sorted((k, _hashable(v)) for k, v in self.reg_gate.items())))
+        key = (T, nq, n_kp_dim, has_reg, has_smooth, self.use_se3_root,
+               mult_key, ref_key, gate_key)
 
         if key not in self._cache:
             builder = self._build_se3 if self.use_se3_root else self._build
@@ -523,6 +575,8 @@ class JaxlsBatchSolver:
                 q_reg_weights=q_reg_weights,
                 smooth_weight=self.smooth_weight,
                 smooth_q_mult=self.smooth_q_mult,
+                q_ref=self.q_ref,
+                reg_gate=self.reg_gate,
             )
         return self._cache[key]
 
