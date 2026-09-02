@@ -179,6 +179,47 @@ def _resolve_smooth_q_mult(mj_model, spec):
     return mult
 
 
+def root_optimization_is_discarded(
+    use_jaxls: bool, root_kp_idx: int, orientation_kp_indices, jnt_type0
+) -> bool:
+    """True when `root_optimization`'s output is overwritten before it is read.
+
+    `root_optimization` solves a ONE-FRAME LM problem for the first `root_dims`
+    qpos entries (`qs_to_opt[:root_dims]`) and leaves every other entry exactly
+    as it found it. On the jaxls pose path, `compute_stac._pose_optimization_jaxls`
+    then builds its OWN per-frame warm start from that same qpos and overwrites
+
+      * `[:, :3]`  from the root keypoint            (needs `root_kp_idx >= 0`), and
+      * `[:, 3:7]` from the trunk-orientation keypoints
+                   (needs `JAXLS_ORIENTATION_KEYPOINTS`, and a FREE root).
+
+    For a FREE root those seven entries are exactly `root_dims`, so nothing of
+    the root phase survives: the FK template's non-qpos fields are all rebuilt
+    from qpos inside the marker cost, and the hinge block it never touched is
+    unchanged either way. Skipping it is then BIT-IDENTICAL, not approximately
+    so, and it is measured at 55.6 s per bout-fly (Session0/2025_10_20_13_20_04
+    bout 28 fly1, 2007 frames) -- 16% of Stage C -- essentially all of it XLA
+    compile for a T=1 problem that executes in 0.01 s.
+
+    Every clause is load-bearing, which is why this is a named function with a
+    truth table (`tests/unit/test_root_opt_skip.py`) rather than an inline
+    `and` chain:
+      * ProjectedGradient (`use_jaxls=False`) builds no per-frame warm start at
+        all -- the root phase is the only thing that positions the root.
+      * With no ROOT_OPTIMIZATION_KEYPOINT the root phase does not run anyway.
+      * With no orientation warm start, `qpos[3:7]` reaches the solver straight
+        from the root phase.
+      * A SLIDE root has `root_dims = 4` while the warm start overwrites 3, so
+        `qpos[3]` survives.
+    """
+    return bool(
+        use_jaxls
+        and root_kp_idx >= 0
+        and orientation_kp_indices is not None
+        and jnt_type0 == mujoco.mjtJoint.mjJNT_FREE
+    )
+
+
 class Stac:
     """Main class with key functionality for skeletal registration and rendering."""
 
@@ -573,6 +614,19 @@ class Stac:
         if self._root_kp_idx == -1:
             print(
                 "Missing or invalid ROOT_OPTIMIZATION_KEYPOINT, skipping root_optimization()"
+            )
+        elif root_optimization_is_discarded(
+            self.stac_core_obj._use_jaxls,
+            self._root_kp_idx,
+            getattr(self.stac_core_obj, "_orientation_kp_indices", None),
+            self._mj_model.jnt_type[0],
+        ):
+            # Not an approximation: the jaxls pose warm-start overwrites every
+            # qpos entry this phase would write. See root_optimization_is_discarded.
+            print(
+                "Skipping root_optimization(): the jaxls per-frame warm-start "
+                "overwrites all 7 root DOFs (root keypoint + orientation "
+                "keypoints), so its result is discarded."
             )
         elif self._mj_model.jnt_type[0] in (
             mujoco.mjtJoint.mjJNT_FREE,
