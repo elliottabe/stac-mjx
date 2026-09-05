@@ -182,9 +182,14 @@ class JaxlsBatchSolver:
         reg_gate: dict | None = None,
         independent_frames: bool | None = None,
         independent_batch: int = 256,
+        lambda_min: float | None = None,
     ):
         self.n_iter = n_iter
         self.linear_solver = linear_solver
+        # LM damping floor; None keeps jaxls' default (1e-5). The weak wing
+        # DOFs need damping to fall well below their curvature (~1e-3) before
+        # the LM step moves them, so a polish pass lowers this to 1e-8.
+        self.lambda_min = lambda_min
         # Independent-frame path (see _solve_independent). None = automatic:
         # used whenever smooth_weight == 0 and T > 1, because then the batch
         # problem is block-diagonal and jaxls' conjugate-gradient path stalls
@@ -192,6 +197,7 @@ class JaxlsBatchSolver:
         # smoothing did not finish in 66 min without it). True/False force it.
         self.independent_frames = independent_frames
         self.independent_batch = int(independent_batch)
+        self.last_iterations = None
         self._independent_fns: dict[tuple, object] = {}
         self.lambda_initial = lambda_initial
         self.smooth_weight = smooth_weight
@@ -683,6 +689,12 @@ class JaxlsBatchSolver:
             return self.smooth_weight <= 0.0
         return bool(self.independent_frames)
 
+    def _trust_region(self) -> "jaxls.TrustRegionConfig":
+        kw = dict(lambda_initial=self.lambda_initial)
+        if self.lambda_min is not None:
+            kw["lambda_min"] = self.lambda_min
+        return jaxls.TrustRegionConfig(**kw)
+
     def _termination(self) -> "jaxls.TerminationConfig":
         return jaxls.TerminationConfig(
             max_iterations=self.n_iter,
@@ -718,14 +730,19 @@ class JaxlsBatchSolver:
                 self._single_frame_solver(prob)))
         solve_batch = self._independent_fns[key]
 
-        out = []
+        out, its = [], []
         for s in range(0, T, B):
             qi, ki = q_init[s:s + B], kp_data[s:s + B]
             n = int(qi.shape[0])
             if n < B:                       # pad the ragged tail to the batch shape
                 qi = jnp.concatenate([qi, jnp.repeat(qi[-1:], B - n, axis=0)])
                 ki = jnp.concatenate([ki, jnp.repeat(ki[-1:], B - n, axis=0)])
-            out.append(solve_batch(qi, ki)[:n])
+            q_b, it_b = solve_batch(qi, ki)
+            out.append(q_b[:n]); its.append(it_b[:n])
+        # Per-frame LM iteration counts of the last independent solve, so a
+        # caller can report how many frames hit n_iter (the cap must be
+        # checked on more than one bout before it is lowered).
+        self.last_iterations = np.asarray(jnp.concatenate(its, axis=0))
         return jnp.concatenate(out, axis=0)
 
     def _single_frame_solver(self, prob: _AnalyzedProblem):
@@ -735,7 +752,7 @@ class JaxlsBatchSolver:
         path; only the linear solver is fixed to dense_cholesky (the per-frame
         system is tiny)."""
         KpVar = prob.KpVar
-        trust = jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial)
+        trust = self._trust_region()
         term = self._termination()
         one = jnp.arange(1)
 
@@ -748,33 +765,59 @@ class JaxlsBatchSolver:
                 wxyz = wxyz / jnp.where(qn > 0, qn, 1.0)
                 root = jaxlie.SE3.from_rotation_and_translation(
                     jaxlie.SO3(wxyz=wxyz[None]), q_row[None, :3])
-                sol = prob.analyzed.solve(
+                sol, summ = prob.analyzed.solve(
                     verbose=False, linear_solver="dense_cholesky",
                     trust_region=trust, termination=term,
                     initial_vals=jaxls.VarValues.make([
                         SE3Var(one).with_value(root),
                         JointVar(one).with_value(q_row[None, _FREE_JOINT_NDOF:]),
                         KpVar(one).with_value(kp_row[None]),
-                    ]))
+                    ]), return_summary=True)
                 r = sol[SE3Var(one)]
                 j = sol[JointVar(one)]
-                return jnp.concatenate([r.translation()[0], r.rotation().wxyz[0], j[0]])
+                return jnp.concatenate([r.translation()[0], r.rotation().wxyz[0], j[0]]), summ.iterations
         else:
             QVar = prob.QVar
 
             def solve_one(q_row, kp_row):
-                sol = prob.analyzed.solve(
+                sol, summ = prob.analyzed.solve(
                     verbose=False, linear_solver="dense_cholesky",
                     trust_region=trust, termination=term,
                     initial_vals=jaxls.VarValues.make([
                         QVar(one).with_value(q_row[None]),
                         KpVar(one).with_value(kp_row[None]),
-                    ]))
+                    ]), return_summary=True)
                 q = sol[QVar(one)][0]
                 quat = q[3:7]
                 qn = jnp.linalg.norm(quat)
-                return q.at[3:7].set(quat / jnp.where(qn > 0, qn, 1.0))
+                return q.at[3:7].set(quat / jnp.where(qn > 0, qn, 1.0)), summ.iterations
         return solve_one
+
+    def _se3_solve_fn(self, prob: _AnalyzedProblem, T: int, linear_solver: str):
+        """(q_init (T,nq), kp_data (T,n_kp_dim)) -> qpos (T,nq) for the SE3 batch
+        problem. Pure in its inputs, so it can be jit'ed and vmapped over starts
+        (`solve_trajectory_multistart`)."""
+        SE3Var, JointVar, KpVar = prob.SE3Var, prob.JointVar, prob.KpVar
+        trust, term = self._trust_region(), self._termination()
+
+        def solve(q_init, kp_data):
+            xyz_init = q_init[:, :3]
+            wxyz_init = q_init[:, 3:7]
+            hinges_init = q_init[:, _FREE_JOINT_NDOF:]
+            qn = jnp.linalg.norm(wxyz_init, axis=-1, keepdims=True)
+            wxyz_init = wxyz_init / jnp.where(qn > 0, qn, 1.0)
+            roots_init = jaxlie.SE3.from_rotation_and_translation(jaxlie.SO3(wxyz=wxyz_init), xyz_init)
+            sol = prob.analyzed.solve(
+                verbose=False, linear_solver=linear_solver, trust_region=trust, termination=term,
+                initial_vals=jaxls.VarValues.make([
+                    SE3Var(jnp.arange(T)).with_value(roots_init),
+                    JointVar(jnp.arange(T)).with_value(hinges_init),
+                    KpVar(jnp.arange(T)).with_value(kp_data),
+                ]))
+            sol_roots = sol[SE3Var(jnp.arange(T))]
+            sol_joints = sol[JointVar(jnp.arange(T))]
+            return jnp.concatenate([sol_roots.translation(), sol_roots.rotation().wxyz, sol_joints], axis=-1)
+        return solve
 
     def _solve_se3(
         self,
@@ -784,57 +827,43 @@ class JaxlsBatchSolver:
         kp_data: jnp.ndarray,
     ) -> jnp.ndarray:
         """Solve trajectory using the SE3Var + JointVar representation."""
-        SE3Var  = prob.SE3Var
-        JointVar = prob.JointVar
-        KpVar   = prob.KpVar
+        n_hinges = q_init.shape[1] - _FREE_JOINT_NDOF
+        linear_solver = self._pick_linear_solver(T, 6 + n_hinges)
+        return self._se3_solve_fn(prob, T, linear_solver)(q_init, kp_data)
 
-        # Split q_init into root pose (SE3) + hinge angles.
-        # MuJoCo free-joint layout: [x,y,z, qw,qx,qy,qz, hinges...]
-        xyz_init    = q_init[:, :3]                      # (T, 3)
-        wxyz_init   = q_init[:, 3:7]                     # (T, 4)
-        hinges_init = q_init[:, _FREE_JOINT_NDOF:]       # (T, n_hinges)
+    def solve_trajectory_multistart(
+        self,
+        q_inits: jnp.ndarray,
+        mjx_model,
+        mjx_data_template,
+        kp_data: jnp.ndarray,
+        qs_to_opt: jnp.ndarray,
+        kps_to_opt: jnp.ndarray,
+        lb: jnp.ndarray,
+        ub: jnp.ndarray,
+        site_idxs: jnp.ndarray,
+        q_reg_weights: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Solve the SAME clip from S different warm starts at once.
 
-        # Normalize quaternion before building SE3 (invalid quat → NaN gradients)
-        qn = jnp.linalg.norm(wxyz_init, axis=-1, keepdims=True)
-        wxyz_init = wxyz_init / jnp.where(qn > 0, qn, 1.0)
-
-        # Build batched jaxlie.SE3 initial values
-        roots_init = jaxlie.SE3.from_rotation_and_translation(
-            jaxlie.SO3(wxyz=wxyz_init),
-            xyz_init,
-        )  # batch shape (T,)
-
-        # Pick linear solver based on problem size.
-        # SE3 path: tangent_dim = 6 (root) + n_hinges per frame
-        n_hinges   = q_init.shape[1] - _FREE_JOINT_NDOF
-        tangent_dim = 6 + n_hinges
-        linear_solver = self._pick_linear_solver(T, tangent_dim)
-
-        sol = prob.analyzed.solve(
-            verbose=False,
-            linear_solver=linear_solver,
-            trust_region=jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial),
-            termination=jaxls.TerminationConfig(
-                max_iterations=self.n_iter,
-                cost_tolerance=self.cost_tolerance,
-                gradient_tolerance=self.gradient_tolerance,
-                parameter_tolerance=self.parameter_tolerance,
-            ),
-            initial_vals=jaxls.VarValues.make([
-                SE3Var(jnp.arange(T)).with_value(roots_init),
-                JointVar(jnp.arange(T)).with_value(hinges_init),
-                KpVar(jnp.arange(T)).with_value(kp_data),
-            ]),
-        )
-
-        # Recombine SE3 + joints back into (T, nq) qpos array.
-        sol_roots  = sol[SE3Var(jnp.arange(T))]        # SE3 batch (T,)
-        sol_joints = sol[JointVar(jnp.arange(T))]      # (T, n_hinges)
-
-        xyz_sol  = sol_roots.translation()              # (T, 3)
-        wxyz_sol = sol_roots.rotation().wxyz            # (T, 4) — already on SO(3)
-
-        return jnp.concatenate([xyz_sol, wxyz_sol, sol_joints], axis=-1)  # (T, nq)
+        q_inits: (S, T, nq). Returns (S, T, nq). The S solves are vmapped over
+        one analyzed T-frame problem (smoothness and all), so they share the
+        GPU: the batch solve is a long chain of small kernels that leaves the
+        device underused, and S instances mostly fill that slack. Built for
+        multi-start against the wing-pitch basin problem (a hinge started at 0
+        stalls against the yaw stop; started at rest it converges), where the
+        winner is then chosen PER FRAME by marker cost. SE3-root path only.
+        """
+        if kp_data.ndim == 3:
+            kp_data = kp_data.reshape(kp_data.shape[0], -1)
+        S, T, nq = q_inits.shape
+        prob = self._get_analyzed(T, mjx_model, mjx_data_template, kp_data, qs_to_opt,
+                                  kps_to_opt, lb, ub, site_idxs, q_reg_weights)
+        if not prob.use_se3_root:
+            raise NotImplementedError("solve_trajectory_multistart needs use_se3_root=True")
+        linear_solver = self._pick_linear_solver(T, 6 + nq - _FREE_JOINT_NDOF)
+        fn = jax.jit(jax.vmap(self._se3_solve_fn(prob, T, linear_solver), in_axes=(0, None)))
+        return fn(q_inits, kp_data)
 
     def _solve_flat(
         self,
@@ -852,7 +881,7 @@ class JaxlsBatchSolver:
         sol = prob.analyzed.solve(
             verbose=False,
             linear_solver=linear_solver,
-            trust_region=jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial),
+            trust_region=self._trust_region(),
             termination=jaxls.TerminationConfig(
                 max_iterations=self.n_iter,
                 cost_tolerance=self.cost_tolerance,

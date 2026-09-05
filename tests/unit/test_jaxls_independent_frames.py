@@ -148,3 +148,24 @@ def test_problem_cache_distinguishes_dof_and_keypoint_masks():
                                                 kps_to_opt=jnp.ones(kp.shape[1]), **common))
     assert len(solver._cache) == 2                          # two distinct problems
     np.testing.assert_allclose(q_full[0, 7:], q_true[0, 7:], atol=2e-2)   # hinges DID move
+
+
+def test_multistart_matches_single_solves_per_start():
+    """solve_trajectory_multistart vmaps the whole-clip solve over S starts;
+    each slice must equal the corresponding single solve (same problem, same
+    settings), including with the smoothness term on."""
+    mj, mjx_model, mjx_data, site_idxs, nq, lb, ub = _setup()
+    T = 4
+    q_true, kp = _targets(mj, T, seed=5)
+    q0 = np.tile(np.array([0, 0, 0, 1, 0, 0, 0] + [0.0] * (nq - 7)), (T, 1))
+    q1 = q0.copy(); q1[:, 7] = 0.8                                 # a different hinge start
+    solver = JaxlsBatchSolver(n_iter=100, smooth_weight=0.05, cost_tolerance=1e-10,
+                              gradient_tolerance=1e-10, parameter_tolerance=1e-12)
+    common = dict(mjx_model=mjx_model, mjx_data_template=mjx_data, kp_data=jnp.asarray(kp),
+                  qs_to_opt=jnp.ones(nq, bool), kps_to_opt=jnp.ones(kp.shape[1]), lb=lb, ub=ub,
+                  site_idxs=site_idxs, q_reg_weights=jnp.zeros(nq))
+    multi = np.asarray(solver.solve_trajectory_multistart(q_inits=jnp.asarray(np.stack([q0, q1])), **common))
+    assert multi.shape == (2, T, nq)
+    for i, qi in enumerate((q0, q1)):
+        single = np.asarray(solver.solve_trajectory(q_init=jnp.asarray(qi), **common))
+        np.testing.assert_allclose(multi[i], single, atol=1e-4)
