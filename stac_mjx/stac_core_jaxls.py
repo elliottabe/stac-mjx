@@ -26,6 +26,15 @@ Fallback (use_se3_root=False)
 Uses a single flat QVar(nq) + Euclidean updates. Needed when some root DOFs are
 frozen (qs_to_opt[:7] has False entries). Adds a quat normalization post-solve.
 
+Independent frames (smooth_weight == 0)
+----------------------------------------
+Without the smoothness term the frames do not interact, and neither jaxls
+linear solver handles that shape well (dense_cholesky wastes ~T**2, CG stalls;
+measured 2026-09-04). `solve_trajectory` then builds the T=1 problem and vmaps
+its solve over frames in batches (`independent_batch`), each frame with a
+dense per-frame factorisation and its own LM termination. Force with
+`independent_frames=True/False`.
+
 Linear solver auto-selection
 ------------------------------
   T * nq < 5000  → dense_cholesky (faster for small problems)
@@ -60,6 +69,7 @@ Usage
 """
 
 import jax
+import numpy as np
 import jax.numpy as jnp
 import jaxlie
 import jaxls
@@ -170,9 +180,19 @@ class JaxlsBatchSolver:
         smooth_q_mult: jnp.ndarray | None = None,
         q_ref: jnp.ndarray | None = None,
         reg_gate: dict | None = None,
+        independent_frames: bool | None = None,
+        independent_batch: int = 256,
     ):
         self.n_iter = n_iter
         self.linear_solver = linear_solver
+        # Independent-frame path (see _solve_independent). None = automatic:
+        # used whenever smooth_weight == 0 and T > 1, because then the batch
+        # problem is block-diagonal and jaxls' conjugate-gradient path stalls
+        # on it (measured 2026-09-04: a 300-frame solve that takes 188 s with
+        # smoothing did not finish in 66 min without it). True/False force it.
+        self.independent_frames = independent_frames
+        self.independent_batch = int(independent_batch)
+        self._independent_fns: dict[tuple, object] = {}
         self.lambda_initial = lambda_initial
         self.smooth_weight = smooth_weight
         self.use_se3_root = use_se3_root
@@ -556,8 +576,19 @@ class JaxlsBatchSolver:
 
         gate_key = (None if self.reg_gate is None
                     else tuple(sorted((k, _hashable(v)) for k, v in self.reg_gate.items())))
+        # qs_to_opt / kps_to_opt / lb / ub / site_idxs are baked into the cost
+        # closures, so they MUST be part of the key. Before 2026-09-05 they were
+        # not: root_optimization's T=1 problem (root DOFs only, trunk keypoints
+        # only) was then reused by the first full-body T=1 solve of the
+        # independent-frame path, which froze every hinge and fit the root to
+        # the trunk alone (mean frame error 0.81 vs 0.0036; body 180 deg off).
+        def _mask_key(v):
+            return tuple(bool(x) for x in np.asarray(v).ravel())
         key = (T, nq, n_kp_dim, has_reg, has_smooth, self.use_se3_root,
-               mult_key, ref_key, gate_key)
+               mult_key, ref_key, gate_key,
+               _mask_key(qs_to_opt), _hashable(kps_to_opt),
+               _hashable(lb), _hashable(ub),
+               tuple(int(x) for x in np.asarray(site_idxs).ravel()))
 
         if key not in self._cache:
             builder = self._build_se3 if self.use_se3_root else self._build
@@ -623,6 +654,13 @@ class JaxlsBatchSolver:
             kp_data = kp_data.reshape(kp_data.shape[0], -1)
         T = q_init.shape[0]
 
+        if self._use_independent(T):
+            prob1 = self._get_analyzed(
+                1, mjx_model, mjx_data_template,
+                kp_data, qs_to_opt, kps_to_opt, lb, ub, site_idxs, q_reg_weights,
+            )
+            return self._solve_independent(prob1, q_init, kp_data)
+
         prob = self._get_analyzed(
             T, mjx_model, mjx_data_template,
             kp_data, qs_to_opt, kps_to_opt, lb, ub, site_idxs, q_reg_weights,
@@ -633,6 +671,110 @@ class JaxlsBatchSolver:
             return self._solve_se3(prob, T, q_init, kp_data)
         else:
             return self._solve_flat(prob, T, q_init, kp_data)
+
+    # ------------------------------------------------------------------
+    # Independent frames: vmapped single-frame LM (smooth_weight == 0)
+    # ------------------------------------------------------------------
+
+    def _use_independent(self, T: int) -> bool:
+        if T <= 1:
+            return False
+        if self.independent_frames is None:
+            return self.smooth_weight <= 0.0
+        return bool(self.independent_frames)
+
+    def _termination(self) -> "jaxls.TerminationConfig":
+        return jaxls.TerminationConfig(
+            max_iterations=self.n_iter,
+            cost_tolerance=self.cost_tolerance,
+            gradient_tolerance=self.gradient_tolerance,
+            parameter_tolerance=self.parameter_tolerance,
+        )
+
+    def _solve_independent(
+        self,
+        prob: _AnalyzedProblem,
+        q_init: jnp.ndarray,
+        kp_data: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Solve T frames as T independent single-frame problems, vmapped.
+
+        With no smoothness term the batch Hessian is block-diagonal: one
+        (6 + n_hinges)-dim block per frame. jaxls has no independent-problem
+        mode -- dense_cholesky factorises the whole block-diagonal matrix
+        (cost ~ T**3 wasted) and conjugate_gradient stalls on it -- so, per
+        jaxls' own guidance for many identical small problems, this builds the
+        T=1 problem once and `jax.vmap`s its `solve` over frames. Every frame
+        gets a dense per-frame factorisation and its OWN LM termination, so a
+        hard frame cannot hold the others hostage. Frames are processed in
+        batches of `independent_batch` (one compile per batch shape; the
+        ragged tail is padded by repeating its last frame and trimmed).
+        """
+        T = int(q_init.shape[0])
+        B = max(1, min(self.independent_batch, T))
+        key = (id(prob), B, bool(prob.use_se3_root))
+        if key not in self._independent_fns:
+            self._independent_fns[key] = jax.jit(jax.vmap(
+                self._single_frame_solver(prob)))
+        solve_batch = self._independent_fns[key]
+
+        out = []
+        for s in range(0, T, B):
+            qi, ki = q_init[s:s + B], kp_data[s:s + B]
+            n = int(qi.shape[0])
+            if n < B:                       # pad the ragged tail to the batch shape
+                qi = jnp.concatenate([qi, jnp.repeat(qi[-1:], B - n, axis=0)])
+                ki = jnp.concatenate([ki, jnp.repeat(ki[-1:], B - n, axis=0)])
+            out.append(solve_batch(qi, ki)[:n])
+        return jnp.concatenate(out, axis=0)
+
+    def _single_frame_solver(self, prob: _AnalyzedProblem):
+        """(q_row (nq,), kp_row (n_kp_dim,)) -> q_opt (nq,) for the T=1 problem.
+
+        Same costs, constraints, trust region and termination as the batch
+        path; only the linear solver is fixed to dense_cholesky (the per-frame
+        system is tiny)."""
+        KpVar = prob.KpVar
+        trust = jaxls.TrustRegionConfig(lambda_initial=self.lambda_initial)
+        term = self._termination()
+        one = jnp.arange(1)
+
+        if prob.use_se3_root:
+            SE3Var, JointVar = prob.SE3Var, prob.JointVar
+
+            def solve_one(q_row, kp_row):
+                wxyz = q_row[3:7]
+                qn = jnp.linalg.norm(wxyz)
+                wxyz = wxyz / jnp.where(qn > 0, qn, 1.0)
+                root = jaxlie.SE3.from_rotation_and_translation(
+                    jaxlie.SO3(wxyz=wxyz[None]), q_row[None, :3])
+                sol = prob.analyzed.solve(
+                    verbose=False, linear_solver="dense_cholesky",
+                    trust_region=trust, termination=term,
+                    initial_vals=jaxls.VarValues.make([
+                        SE3Var(one).with_value(root),
+                        JointVar(one).with_value(q_row[None, _FREE_JOINT_NDOF:]),
+                        KpVar(one).with_value(kp_row[None]),
+                    ]))
+                r = sol[SE3Var(one)]
+                j = sol[JointVar(one)]
+                return jnp.concatenate([r.translation()[0], r.rotation().wxyz[0], j[0]])
+        else:
+            QVar = prob.QVar
+
+            def solve_one(q_row, kp_row):
+                sol = prob.analyzed.solve(
+                    verbose=False, linear_solver="dense_cholesky",
+                    trust_region=trust, termination=term,
+                    initial_vals=jaxls.VarValues.make([
+                        QVar(one).with_value(q_row[None]),
+                        KpVar(one).with_value(kp_row[None]),
+                    ]))
+                q = sol[QVar(one)][0]
+                quat = q[3:7]
+                qn = jnp.linalg.norm(quat)
+                return q.at[3:7].set(quat / jnp.where(qn > 0, qn, 1.0))
+        return solve_one
 
     def _solve_se3(
         self,
